@@ -1,0 +1,21 @@
+# Environments
+.env
+venv/
+env/
+
+# Python Cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Django Local Database
+db.sqlite3
+db.sqlite3-journal
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Static files collected during production testing
+staticfiles/

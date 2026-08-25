@@ -1,0 +1,81 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container mt-5">
+    <a href="{% url 'dashboard' %}" class="btn btn-outline-secondary mb-4">&larr; Back to Dashboard</a>
+    
+    <div class="row">
+        <div class="col-lg-5 mb-4">
+            <div class="card shadow-sm border-0 h-100">
+                <div class="card-header bg-dark text-white">
+                    <h5 class="mb-0">🤖 Submit Code for Review</h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST">
+                        {% csrf_token %}
+                        {{ form.as_p }}
+                        <button type="submit" id="analyzeBtn" class="btn btn-primary w-100 mt-2">
+                            <span id="btnText">Analyze Complexity & Edge Cases</span>
+                            <span id="btnSpinner" class="spinner-border spinner-border-sm d-none ms-2" role="status" aria-hidden="true"></span>
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-7">
+            <div class="card shadow-sm border-0 h-100">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0">✨ AI Feedback Report</h5>
+                </div>
+                <div class="card-body bg-light" style="max-height: 700px; overflow-y: auto;">
+                    
+                    {% if review_result %}
+                        {% if reasoning_result %}
+                            <div class="p-3 mb-4 bg-white text-muted border-start border-secondary border-4 small fst-italic shadow-sm">
+                                {{ reasoning_result|safe }}
+                            </div>
+                        {% endif %}
+
+                        <div class="markdown-content p-3 bg-white shadow-sm rounded">
+                            {{ review_result|safe }}
+                        </div>
+                    {% else %}
+                        <div class="text-center text-muted mt-5">
+                            <p>Paste your Codeforces problem URL and source code on the left.</p>
+                            <p>The AI will scan for edge cases, logical flaws, and Big-O constraints.</p>
+                        </div>
+                    {% endif %}
+                    
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Listen for the form submission
+    document.querySelector('form').addEventListener('submit', function(e) {
+        // Ensure the form has actual code in it before locking
+        if (this.checkValidity()) {
+            const btn = document.getElementById('analyzeBtn');
+            const text = document.getElementById('btnText');
+            const spinner = document.getElementById('btnSpinner');
+
+            // 1. Change the text so the user knows it is working
+            text.innerText = 'Analyzing... please wait ';
+            
+            // 2. Un-hide the spinner icon
+            spinner.classList.remove('d-none');
+            
+            // 3. Make the button look unclickable using Bootstrap classes
+            btn.classList.add('disabled');
+            
+            // 4. Safely disable the button slightly after submit triggers
+            setTimeout(() => { 
+                btn.disabled = true; 
+            }, 10);
+        }
+    });
+</script>
+{% endblock %}

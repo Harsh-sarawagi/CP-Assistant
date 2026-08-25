@@ -1,0 +1,44 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h2>Welcome back, {{ user.username }}!</h2>
+            <p class="text-muted">Select an AI tool to level up your CP game today.</p>
+        </div>
+    </div>
+    
+    <div class="row">
+        <div class="col-md-4 mb-4">
+            <div class="card border-0 shadow-sm h-100 border-start border-primary border-4">
+                <div class="card-body d-flex flex-column">
+                    <h5 class="text-dark mb-3">🤖 AI Code Review</h5>
+                    <p class="text-muted small mb-4">Paste your code to analyze Big-O complexity, catch edge cases, and get optimization suggestions instantly.</p>
+                    <a href="{% url 'ai_review' %}" class="btn btn-outline-primary mt-auto">Open Code Review</a>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-4 mb-4">
+            <div class="card border-0 shadow-sm h-100 border-start border-danger border-4">
+                <div class="card-body d-flex flex-column">
+                    <h5 class="text-dark mb-3">⚔️ Rival Comparison</h5>
+                    <p class="text-muted small mb-4">Head-to-head visual charts and AI breakdown of your strengths vs a rival's weaknesses.</p>
+                    <a href="{% url 'compare' %}" class="btn btn-outline-danger mt-auto">Compare Stats</a>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4 mb-4">
+            <div class="card border-0 shadow-sm h-100 border-start border-warning border-4">
+                <div class="card-body d-flex flex-column">
+                    <h5 class="text-dark mb-3">🔍 Weak-Spot Analytics</h5>
+                    <p class="text-muted small mb-4">Analyze recent failures to generate a personalized 4-week algorithmic practice roadmap.</p>
+                    <a href="{% url 'weak_spot' %}" class="btn btn-outline-warning text-dark mt-auto">Generate Roadmap</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,174 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="row">
+        
+        <div class="col-lg-7 mb-4">
+            
+            <div class="d-flex justify-content-between align-items-end mb-3">
+                <h2 class="mb-0">Upcoming Contests</h2>
+                
+                <div class="d-flex gap-4 align-items-center">
+                    
+                    <select id="platformFilter" class="form-select form-select-sm shadow-sm border rounded" style="width: auto; min-width: 120px;">
+                        <option value="all">All</option>
+                        {% for plat in platforms %}
+                            <option value="{{ plat }}">{{ plat }}</option>
+                        {% endfor %}
+                    </select>
+                    
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="text-dark fw-bold" style="font-size: 0.95rem;">Show Per Page:</span>
+                        <select id="limitFilter" class="form-select form-select-sm shadow-sm border rounded" style="width: auto; min-width: 65px;">
+                            <option value="5">5</option>
+                            <option value="10" selected>10</option>
+                            <option value="15">15</option>
+                            <option value="20">20</option>
+                            <option value="25">25</option>
+                        </select>
+                    </div>
+
+                </div>
+            </div>
+
+            <div class="card shadow-sm border-0">
+                <div class="d-flex justify-content-between px-3 py-2 bg-light border-bottom text-muted small fw-bold">
+                    <div style="width: 40%;">Contest</div>
+                    <div style="width: 20%;" class="text-center">Platform</div>
+                    <div style="width: 15%;" class="text-center">Starts in</div>
+                    <div style="width: 15%;" class="text-center">Duration</div>
+                    <div style="width: 10%;" class="text-end"></div>
+                </div>
+                
+                <div class="list-group list-group-flush" id="contestList">
+                    {% for contest in contests %}
+                    <div class="list-group-item d-flex justify-content-between align-items-center py-3 contest-item" data-platform="{{ contest.platform }}">
+                        
+                        <div style="width: 40%;" class="text-truncate pe-2">
+                            <a href="{{ contest.url }}" target="_blank" class="text-decoration-none fw-bold text-primary">{{ contest.title }}</a>
+                        </div>
+                        
+                        <div style="width: 20%;" class="text-center">
+                            <span class="badge bg-secondary rounded-pill px-3 py-2"><small>{{ contest.platform }}</small></span>
+                        </div>
+                        
+                        <div style="width: 15%;" class="text-center">
+                            <span class="badge bg-primary px-2 py-1">{{ contest.time_left }}</span>
+                        </div>
+                        
+                        <div style="width: 15%;" class="text-center text-dark small fw-semibold">
+                            {{ contest.duration_formatted }}
+                        </div>
+                        
+                        <div style="width: 10%;" class="text-end">
+                            <a href="{{ contest.url }}" target="_blank" class="btn btn-outline-dark btn-sm rounded-pill px-3">View</a>
+                        </div>
+                        
+                    </div>
+                    {% empty %}
+                    <div class="p-4 text-center text-muted">
+                        No upcoming contests found. Check API connection.
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-5">
+            <div class="card shadow-sm border-0 bg-white mb-4">
+                <div class="card-body">
+                    <h3 class="card-title">Level Up Your CP Game</h3>
+                    <p class="text-muted">Advanced analytics and ML insights for competitive programmers.</p>
+                    <ul class="list-group list-group-flush">
+                        <li class="list-group-item px-0">📈 Predictive Rating & Modeling</li>
+                        <li class="list-group-item px-0">🤖 LLM-Driven Code Reviews</li>
+                        <li class="list-group-item px-0">⚔️ Head-to-Head Visual Comparisons</li>
+                        <li class="list-group-item px-0">🔍 Weak-Spot Analytics</li> </ul>
+                </div>
+            </div>
+
+            {% if messages %}
+                {% for message in messages %}
+                    <div class="alert alert-danger">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+
+            {% if not user.is_authenticated %}
+                <div class="card shadow border-0">
+                    <div class="card-header bg-dark text-white">
+                        <h5 class="mb-0">Developer Login</h5>
+                    </div>
+                    <div class="card-body">
+                        <form action="{% url 'home' %}" method="POST">
+                            {% csrf_token %}
+                            <div class="mb-3">
+                                <label class="form-label">Username</label>
+                                <input type="text" name="username" class="form-control" required>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Password</label>
+                                <input type="password" name="password" class="form-control" required>
+                            </div>
+                            <button type="submit" class="btn btn-primary w-100">Login</button>
+
+                            <div class="text-center mt-3">
+                                <a href="{% url 'register' %}" class="text-decoration-none">
+                                    Create Account
+                                </a>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            {% else %}
+                <div class="card shadow-sm border-0 bg-primary text-white">
+                    <div class="card-body text-center py-5">
+                        <h4>Welcome back, {{ user.username }}!</h4>
+                        <p class="mb-4">Access AI code reviews, compare rival stats, and generate your weak-spot practice roadmap.</p>
+                        <a href="{% url 'dashboard' %}" class="btn btn-light fw-bold w-100">
+                            Go to Dashboard
+                        </a>
+                    </div>
+                </div>
+            {% endif %}
+        </div>
+
+    </div>
+</div>
+
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        const platformFilter = document.getElementById('platformFilter');
+        const limitFilter = document.getElementById('limitFilter');
+        const items = document.querySelectorAll('.contest-item');
+
+        function updateList() {
+            const platform = platformFilter.value;
+            const limit = parseInt(limitFilter.value);
+            let visibleCount = 0;
+
+            items.forEach(item => {
+                const itemPlatform = item.getAttribute('data-platform');
+                const matchesPlatform = (platform === 'all' || itemPlatform === platform);
+                
+                // Show the item if it matches the platform AND we haven't hit our limit yet
+                if (matchesPlatform && visibleCount < limit) {
+                    item.classList.remove('d-none');
+                    item.classList.add('d-flex');
+                    visibleCount++;
+                } else {
+                    item.classList.remove('d-flex');
+                    item.classList.add('d-none');
+                }
+            });
+        }
+
+        // Listen for user changes
+        platformFilter.addEventListener('change', updateList);
+        limitFilter.addEventListener('change', updateList);
+        
+        // Run once on page load to apply default limit (5)
+        updateList();
+    });
+</script>
+{% endblock %}

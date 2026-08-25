@@ -1,0 +1,116 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<div class="container mt-5 mb-5">
+    <a href="{% url 'profile' %}" class="btn btn-outline-secondary mb-4">&larr; Back to Command Center</a>
+    
+    <div class="row justify-content-center">
+        <div class="col-lg-10">
+            <div class="card shadow-sm border-0">
+                <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">📈 ML Predictive Rating</h5>
+                </div>
+                
+                <div class="card-body">
+                    {% if error_message %}
+                        <div class="alert alert-danger text-center mt-3">{{ error_message }}</div>
+                    {% elif chart_data %}
+                        
+                        <div class="row text-center mb-4">
+                            <div class="col-md-6">
+                                <div class="p-3 bg-light rounded border-start border-primary border-4">
+                                    <h6 class="text-muted text-uppercase mb-1">Current Rating</h6>
+                                    <h2 class="mb-0 text-primary">{{ chart_data.current_rating }}</h2>
+                                </div>
+                            </div>
+                            <div class="col-md-6 mt-3 mt-md-0">
+                                <div class="p-3 bg-light rounded border-start border-success border-4">
+                                    <h6 class="text-muted text-uppercase mb-1">Predicted Next Contest</h6>
+                                    <h2 class="mb-0 text-success">{{ chart_data.next_predicted }}</h2>
+                                </div>
+                            </div>
+                        </div>
+
+                        <canvas id="predictionChart" height="120"></canvas>
+                        
+                        {{ chart_data|json_script:"ml-data" }}
+                        
+                        <script>
+                            const data = JSON.parse(document.getElementById('ml-data').textContent);
+                            
+                            // We need to pad the historical arrays with "null" so the future predictions
+                            // start exactly where the historical data ends on the graph.
+                            const historicalLength = data.actual_ratings.length;
+                            const paddedPredictions = Array(historicalLength - 1).fill(null);
+                            
+                            // Connect the last actual point to the first predicted point for a seamless line
+                            paddedPredictions.push(data.actual_ratings[historicalLength - 1]);
+                            paddedPredictions.push(...data.predictions);
+
+                            const ctx = document.getElementById('predictionChart').getContext('2d');
+                            new Chart(ctx, {
+                                type: 'line',
+                                data: {
+                                    labels: data.labels,
+                                    datasets: [
+                                        {
+                                            label: 'Actual Rating',
+                                            data: data.actual_ratings,
+                                            borderColor: 'rgba(13, 110, 253, 1)', // Solid Blue
+                                            backgroundColor: 'rgba(13, 110, 253, 0.1)',
+                                            borderWidth: 3,
+                                            pointRadius: 4,
+                                            fill: true,
+                                            tension: 0.1 // Slight curve
+                                        },
+                                        {
+                                            label: 'ML Trendline',
+                                            data: data.trend_line,
+                                            borderColor: 'rgba(108, 117, 125, 0.5)', // Dashed Gray
+                                            borderWidth: 2,
+                                            borderDash: [5, 5],
+                                            pointRadius: 0,
+                                            tension: 0.4
+                                        },
+                                        {
+                                            label: 'Future Prediction',
+                                            data: paddedPredictions,
+                                            borderColor: 'rgba(25, 135, 84, 1)', // Dashed Green
+                                            borderWidth: 3,
+                                            borderDash: [10, 5],
+                                            pointRadius: 6,
+                                            pointBackgroundColor: 'rgba(25, 135, 84, 1)',
+                                            tension: 0.1
+                                        }
+                                    ]
+                                },
+                                options: {
+                                    responsive: true,
+                                    interaction: {
+                                        intersect: false,
+                                        mode: 'index',
+                                    },
+                                    plugins: {
+                                        tooltip: {
+                                            callbacks: {
+                                                label: function(context) {
+                                                    let label = context.dataset.label || '';
+                                                    if (label) { label += ': '; }
+                                                    if (context.parsed.y !== null) { label += Math.round(context.parsed.y); }
+                                                    return label;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            });
+                        </script>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

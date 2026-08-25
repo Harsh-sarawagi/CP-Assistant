@@ -1,0 +1,162 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<div class="container mt-5 mb-5">
+    <a href="{% url 'dashboard' %}" class="btn btn-outline-secondary mb-4">&larr; Back to Dashboard</a>
+    
+    <div class="row">
+        <!-- Left Column: Form & AI Output -->
+        <div class="col-lg-5 mb-4">
+            <div class="card shadow-sm border-0 mb-4">
+                <div class="card-header bg-dark text-white">
+                    <h5 class="mb-0">⚔️ Head-to-Head Comparison</h5>
+                </div>
+                <div class="card-body">
+                    {% if error_message %}
+                        <div class="alert alert-danger">{{ error_message }}</div>
+                    {% endif %}
+                    
+                    <form method="POST">
+                        {% csrf_token %}
+                        {{ form.as_p }}
+                        
+                        <button type="submit" id="compareBtn" class="btn btn-primary w-100 mt-2">
+                            <span id="btnText">Fetch Stats & Analyze</span>
+                            <span id="btnSpinner" class="spinner-border spinner-border-sm d-none ms-2" role="status" aria-hidden="true"></span>
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- AI Output Card -->
+            {% if ai_analysis %}
+            <div class="card shadow-sm border-0 border-start border-primary border-4">
+                <div class="card-body bg-light">
+                    <h5 class="text-primary mb-3">🤖 Tactical Breakdown</h5>
+                    {{ ai_analysis|safe }}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Right Column: Chart.js Dashboards -->
+        <div class="col-lg-7">
+            <div class="card shadow-sm border-0 h-100">
+                <div class="card-body">
+                    {% if chart_data %}
+                        <h3 class="mb-4 text-center">{{ chart_data.u1_name }} vs {{ chart_data.u2_name }}</h3>
+                        
+                        <!-- Top Row: Solved (Bar) & Accuracy (Doughnut) -->
+                        <div class="row mb-4">
+                            <div class="col-md-6 text-center">
+                                <h5>Total Problems Solved</h5>
+                                <canvas id="solvedChart" height="250"></canvas>
+                            </div>
+                            <div class="col-md-6 text-center">
+                                <h5>Acceptance Rate (%)</h5>
+                                <canvas id="accChart" height="250"></canvas>
+                            </div>
+                        </div>
+
+                        <!-- Bottom Row: 5 Category Radar Chart -->
+                        <div class="row mt-4">
+                            <div class="col-12 text-center">
+                                <h5>5-Category Strengths Analysis</h5>
+                                <canvas id="radarChart" height="200"></canvas>
+                            </div>
+                        </div>
+
+                        <!-- SAFELY EMBED JSON FOR JAVASCRIPT -->
+                        {{ chart_data|json_script:"chart-data" }}
+                        
+                        <script>
+                            // Read the JSON data exactly as you requested
+                            const data = JSON.parse(document.getElementById('chart-data').textContent);
+                            
+                            // Colors
+                            const color1 = 'rgba(13, 110, 253, 0.7)'; 
+                            const border1 = 'rgba(13, 110, 253, 1)';
+                            const color2 = 'rgba(220, 53, 69, 0.7)'; 
+                            const border2 = 'rgba(220, 53, 69, 1)';
+
+                            // Total Solved Bar Chart
+                            new Chart(document.getElementById('solvedChart').getContext('2d'), {
+                                type: 'bar',
+                                data: {
+                                    labels: [data.u1_name, data.u2_name],
+                                    datasets: [{
+                                        label: 'Unique Solved',
+                                        data: data.solved,
+                                        backgroundColor: [color1, color2],
+                                        borderColor: [border1, border2],
+                                        borderWidth: 1
+                                    }]
+                                },
+                                options: { responsive: true, plugins: { legend: { display: false } } }
+                            });
+
+                            // Acceptance Rate Doughnut Chart
+                            new Chart(document.getElementById('accChart').getContext('2d'), {
+                                type: 'doughnut',
+                                data: {
+                                    labels: [data.u1_name, data.u2_name],
+                                    datasets: [{
+                                        data: data.acc_rates,
+                                        backgroundColor: [color1, color2],
+                                        hoverOffset: 4
+                                    }]
+                                },
+                                options: { responsive: true }
+                            });
+
+                            // Five-Category Radar Chart
+                            new Chart(document.getElementById('radarChart').getContext('2d'), {
+                                type: 'radar',
+                                data: {
+                                    labels: data.categories,
+                                    datasets: [
+                                        {
+                                            label: data.u1_name,
+                                            data: data.u1_categories,
+                                            backgroundColor: 'rgba(13, 110, 253, 0.2)',
+                                            borderColor: border1,
+                                            pointBackgroundColor: border1,
+                                        },
+                                        {
+                                            label: data.u2_name,
+                                            data: data.u2_categories,
+                                            backgroundColor: 'rgba(220, 53, 69, 0.2)',
+                                            borderColor: border2,
+                                            pointBackgroundColor: border2,
+                                        }
+                                    ]
+                                },
+                                options: { responsive: true, scales: { r: { beginAtZero: true } } }
+                            });
+                        </script>
+                    {% else %}
+                        <div class="text-center text-muted d-flex flex-column justify-content-center h-100 mt-5">
+                            <h1 class="display-1 mb-3">📊</h1>
+                            <p>Enter two handles to generate visual statistics and AI breakdown.</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.querySelector('form').addEventListener('submit', function(e) {
+        if (this.checkValidity()) {
+            const btn = document.getElementById('compareBtn');
+            document.getElementById('btnText').innerText = 'Gathering Intel... ';
+            document.getElementById('btnSpinner').classList.remove('d-none');
+            btn.classList.add('disabled');
+            setTimeout(() => { btn.disabled = true; }, 10);
+        }
+    });
+</script>
+{% endblock %}
