@@ -277,6 +277,6 @@ Contributions are welcome! Feel free to fork the repository, open structural iss
 
 ## 📝 Author
 
-**Yash Gupta** | Mechanical Engineering, IIT Kharagpur
+**Harsh Sarawagi** | Electrical Engineering, IIT Kanpur
 
-📧 Email: [yg291557@gmail.com](mailto:yg291557@gmail.com)
+📧 Email: [harsh2342sarawagi@gmail.com](mailto:harsh2342sarawagi@gmail.com)
