@@ -15,7 +15,7 @@ from pathlib import Path
 import os
 from dotenv import load_dotenv
 
-
+load_dotenv()
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -80,8 +80,12 @@ WSGI_APPLICATION = 'config.wsgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': os.getenv('DB_NAME'),
+        'USER': os.getenv('DB_USER'),
+        'PASSWORD': os.getenv('DB_PASSWORD'),
+        'HOST': os.getenv('DB_HOST', 'localhost'),
+        'PORT': os.getenv('DB_PORT', '5432'),
     }
 }
 
@@ -131,9 +135,9 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 AUTH_USER_MODEL = 'core.CustomUser'
 
 # Load variables from the .env file
-load_dotenv()
+
 
 # Production AI API Configuration Hooks
 AI_API_KEY = os.environ.get('AI_API_KEY', '')
 AI_API_URL = os.environ.get('AI_API_URL', 'https://api.groq.com/openai/v1/chat/completions')
-AI_MODEL_NAME = os.environ.get('AI_MODEL_NAME', 'llama-3.3-70b-versatile') # <-- Updated
+AI_MODEL_NAME = os.environ.get('AI_MODEL_NAME', 'openai/gpt-oss-120b') # <-- Updated

@@ -12,6 +12,8 @@ __pycache__/
 # Django Local Database
 db.sqlite3
 db.sqlite3-journal
+sqlite_data.json
+db.sqlite3.backup
 
 # OS generated files
 .DS_Store

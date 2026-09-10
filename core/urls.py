@@ -13,6 +13,5 @@ urlpatterns = [
     
     # The 3 Tools
     path('ai-review/', views.ai_code_review_view, name='ai_review'),
-    path('compare/', views.compare_view, name='compare'),
     path('weak-spot/', views.weak_spot_view, name='weak_spot'),
 ]

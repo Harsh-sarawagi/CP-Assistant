@@ -11,7 +11,7 @@ from django.shortcuts import render, redirect
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
-from .forms import CustomRegistrationForm, ProfileUpdateForm, CodeReviewForm, ComparisonForm
+from .forms import CustomRegistrationForm, ProfileUpdateForm, CodeReviewForm
 from bs4 import BeautifulSoup
 from django.core.cache import cache
 
@@ -384,107 +384,6 @@ def ai_code_review_view(request):
         'form': form, 
         'review_result': review_html,
         'reasoning_result': reasoning_html
-    })
-
-
-@login_required(login_url='home')
-def compare_view(request):
-    chart_data = None
-    ai_analysis = None
-    error_message = None
-    
-    initial_data = {}
-    if request.user.codeforces_handle:
-        initial_data['handle_1'] = request.user.codeforces_handle
-
-    if request.method == 'POST':
-        form = ComparisonForm(request.POST)
-        if form.is_valid():
-            # FIXED: Looking for handle_1 and handle_2
-            h1 = form.cleaned_data['handle_1']
-            h2 = form.cleaned_data['handle_2']
-
-            try:
-                info_resp = requests.get(f"https://codeforces.com/api/user.info?handles={h1};{h2}", timeout=5).json()
-                time.sleep(0.5)
-                s1_resp = requests.get(f"https://codeforces.com/api/user.status?handle={h1}", timeout=8).json()
-                time.sleep(0.5)
-                s2_resp = requests.get(f"https://codeforces.com/api/user.status?handle={h2}", timeout=8).json()
-
-                if info_resp.get('status') == 'OK' and s1_resp.get('status') == 'OK' and s2_resp.get('status') == 'OK':
-                    u1_info, u2_info = info_resp['result'][0], info_resp['result'][1]
-                    s1_data, s2_data = s1_resp['result'], s2_resp['result']
-
-                    def analyze_submissions(subs):
-                        total = len(subs)
-                        if total == 0: return 0, 0, {}
-                        accepted = [s for s in subs if s.get('verdict') == 'OK']
-                        unique_solved = len(set([s['problem']['name'] for s in accepted if 'name' in s['problem']]))
-                        acc_rate = round((len(accepted) / total) * 100, 1)
-                        tag_counts = {}
-                        for s in accepted:
-                            for tag in s['problem'].get('tags', []):
-                                tag_counts[tag] = tag_counts.get(tag, 0) + 1
-                        return unique_solved, acc_rate, tag_counts
-
-                    u1_solved, u1_acc, u1_tags = analyze_submissions(s1_data)
-                    u2_solved, u2_acc, u2_tags = analyze_submissions(s2_data)
-
-                    common_tags = list(set(list(u1_tags.keys()) + list(u2_tags.keys())))
-                    common_tags.sort(key=lambda t: u1_tags.get(t, 0) + u2_tags.get(t, 0), reverse=True)
-                    top_5_categories = common_tags[:5] if common_tags else ["Math", "Greedy", "DP", "Graphs", "Strings"]
-
-                    # FIXED: Restored the dictionary Chart.js needs to draw the visuals
-                    chart_data = {
-                        'u1_name': u1_info.get('handle', h1),
-                        'u2_name': u2_info.get('handle', h2),
-                        'solved': [u1_solved, u2_solved],
-                        'acc_rates': [u1_acc, u2_acc],
-                        'categories': top_5_categories,
-                        'u1_categories': [u1_tags.get(tag, 0) for tag in top_5_categories],
-                        'u2_categories': [u2_tags.get(tag, 0) for tag in top_5_categories]
-                    }
-
-                    u1_handle = u1_info.get('handle', 'Player 1')
-                    u2_handle = u2_info.get('handle', 'Player 2')
-                    prompt = f"""
-                    You are an elite Competitive Programming Coach. Compare these two competitor profiles:
-                    - {u1_handle}: Rating: {u1_info.get('rating', 'Unrated')}, Solved: {u1_solved}, Accuracy: {u1_acc}%
-                    - {u2_handle}: Rating: {u2_info.get('rating', 'Unrated')}, Solved: {u2_solved}, Accuracy: {u2_acc}%
-
-                    Write a highly detailed, sharp professional comparison formatted strictly in Markdown. 
-                    Follow these formatting rules EXACTLY:
-                    - NEVER use backslashes to escape underscores or special characters. Do NOT write `S\\_i`.
-                    - Refer to the competitors ONLY by their actual handles (`{u1_handle}` and `{u2_handle}`). Do NOT use generic terms like "Competitor 1" or "Player 2".
-                    - Wrap all handles, tags, and code elements in standard backticks.
-
-                    Format your response exactly using these sections:
-
-                    ### 🎯 The Matchup: {u1_handle} vs {u2_handle}
-                    Provide a clear, 2-sentence statistical summary evaluating the skill gap or competitive tension between these two profiles.
-
-                    ### ⚡ Competitive Metrics Breakdown
-                    Analyze who is more accurate and who grinds out more problems. Contrast their styles (e.g., speed vs accuracy).
-
-                    ### 🛠️ Strategic Roadmap for {u1_handle}
-                    Based on their performance gaps, provide exactly two highly technical, actionable points showing what `{u1_handle}` must change or practice to outpace `{u2_handle}`.
-
-                    CRITICAL: Do NOT write introductory or concluding filler. Output ONLY the requested Markdown analysis.
-                    """
-                    content, _ = call_ai_engine(prompt)
-                    ai_analysis = markdown.markdown(content)
-                else:
-                    error_message = "Codeforces API error. One or both handles might not exist."
-            except Exception as e:
-                error_message = f"Backend Network Error connecting to Codeforces."
-    else:
-        form = ComparisonForm(initial=initial_data)
-
-    return render(request, 'core/compare.html', {
-        'form': form,
-        'chart_data': chart_data,
-        'ai_analysis': ai_analysis,
-        'error_message': error_message
     })
 
 

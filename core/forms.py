@@ -36,13 +36,3 @@ class CodeReviewForm(forms.Form):
         label="Your Source Code",
         widget=forms.Textarea(attrs={'class': 'form-control font-monospace', 'rows': 12, 'placeholder': 'Paste your C++ or Python code here...'})
     )
-
-class ComparisonForm(forms.Form):
-    handle_1 = forms.CharField(
-        label="Player 1 (Your Handle)",
-        widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'CF username'})
-    )
-    handle_2 = forms.CharField(
-        label="Player 2 (Rival Handle)",
-        widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'CF username'})
-    )

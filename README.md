@@ -14,7 +14,7 @@ The application is deployed using Docker with a persistent SQLite volume and aut
 
 ---
 
-An advanced **Analytics and AI-Driven Insights Platform** built strictly for Competitive Programmers. Unlike traditional profile trackers, Algolytics leverages Large Language Models to perform elite-level code reviews, run rival face-offs, track granular problem statistics, identify core algorithmic weaknesses, and generate personalized 4-week practice roadmaps based on historical Codeforces performance.
+An advanced **Analytics and AI-Driven Insights Platform** built strictly for Competitive Programmers. Unlike traditional profile trackers, Algolytics leverages Large Language Models to perform elite-level code reviews, track granular problem statistics, identify core algorithmic weaknesses, and generate personalized 4-week practice roadmaps based on historical Codeforces performance.
 
 The backend is powered by **Django**, utilizing custom authentication, SQLite database persistence, and **Groq's Llama 3.3** for lightning-fast algorithmic reasoning and feedback generation.
 
@@ -35,10 +35,9 @@ The backend is powered by **Django**, utilizing custom authentication, SQLite da
 - **Tags Solved**: Provides a comprehensive chart of solved algorithmic categories (e.g., Dynamic Programming, Greedy, Graphs, Math) to show overall expertise.
 
 ### 🎛️ Dashboard Page (Authenticated)
-Acts as the central command center, offering direct entry points to three core deep-analytical tools:
+Acts as the central command center, offering direct entry points to two core deep-analytical tools:
 1. **🤖 AI Code Review**
-2. **⚔️ Rival Comparison**
-3. **🔍 Weak-Spot Analytics**
+2. **🔍 Weak-Spot Analytics**
 
 ---
 
@@ -48,11 +47,6 @@ Acts as the central command center, offering direct entry points to three core d
 - **Input**: Provide the official Codeforces problem link along with your written C++ solution.
 - **Mechanism**: Automatically fetches and parses the problem description and official contest tutorials using `BeautifulSoup4`.
 - **Feedback**: The LLM evaluates your logic directly against the official tutorial to isolate edge cases, hidden integer overflows, optimization bottlenecks, or potential TLE (Time Limit Exceeded) conditions.
-
-### ⚔️ Rival Comparison
-- **Input**: Provide a rival's Codeforces handle.
-- **Mechanism**: Extracts comparative profile datasets across platforms.
-- **Feedback**: Generates an exhaustive AI-driven comparative analysis, cross-examines key development metrics, visualizes a side-by-side comparison of the total number of problems solved, and details structural advice on how to outpace your competitor.
 
 ### 🔍 Weak-Spot Analytics & 4-Week Roadmap
 - **Mechanism**: Automatically scans the user's last 100 historical Codeforces submissions to isolate incorrect verdicts (`WA`, `TLE`, `RE`).
@@ -109,7 +103,6 @@ Algolytics/
 ├── templates/
 │   ├── core/
 │   │   ├── code_review.html
-│   │   ├── compare.html
 │   │   ├── dashboard.html
 │   │   ├── home.html
 │   │   ├── predict.html
@@ -261,11 +254,6 @@ Visit: `/admin`
 
 Admin capabilities include managing active user listings, adjusting custom database objects, and updating or manually overstepping integrated user Codeforces handles.
 
----
-
-## 📄 License
-
-This project is licensed under the MIT License.
 
 ---
 
