@@ -1,270 +1,260 @@
-# 🚀 Algolytics
+# CP Assistant
 
-![Made with Python](https://img.shields.io/badge/Made%20with-Python-3776AB?style=for-the-badge&logo=python&logoColor=white)
-![Backend: Django](https://img.shields.io/badge/Backend-Django-092E20?style=for-the-badge&logo=django&logoColor=white)
-![AI Engine: Groq](https://img.shields.io/badge/AI%20Engine-Groq-F55036?style=for-the-badge&logo=amd&logoColor=white)
-![Containerized: Docker](https://img.shields.io/badge/Containerized-Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white)
-![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)
+CP Assistant is a Django-based competitive programming analytics platform with a Chrome Extension for Codeforces problemset pages.
 
-## 🌐 Live Application
+The project provides:
 
-The application is deployed using Docker with a persistent SQLite volume and automated cloud routing.
+- Codeforces profile and submission analytics
+- Rating trajectory and solved-problem statistics
+- Weak-tag analysis based on submission history
+- AI-assisted code review using Groq
+- Personalized practice roadmap generation
+- Deterministic problem fit and tag-performance analysis
+- Deterministic candidate filtering with an AI-selected next-problem recommendation
+- An MV3 Chrome Extension with an inline panel on Codeforces problem pages
 
-👉 **Live Application:** http://140.238.162.114/
-
----
-
-An advanced **Analytics and AI-Driven Insights Platform** built strictly for Competitive Programmers. Unlike traditional profile trackers, Algolytics leverages Large Language Models to perform elite-level code reviews, track granular problem statistics, identify core algorithmic weaknesses, and generate personalized 4-week practice roadmaps based on historical Codeforces performance.
-
-The backend is powered by **Django**, utilizing custom authentication, SQLite database persistence, and **Groq's Llama 3.3** for lightning-fast algorithmic reasoning and feedback generation.
-
----
-
-## 🚀 App Architecture & Pages
-
-### 🏠 Home Page (Public)
-- **Centralized Contest Hub**: Consolidates and displays live and upcoming contests across major competitive programming networks:
-  - Codeforces
-  - CodeChef
-  - LeetCode
-  - AtCoder
-
-### 📊 Profile Analytics Page (Authenticated)
-- **📈 ML Rating Trajectory**: Uses a predictive machine learning model to evaluate submission trajectories, past contest ranks, and milestones to simulate upcoming performance bands and calculate a reliable forward-looking user rating prediction.
-- **Problem Ratings Solved**: Visualizes a breakdown of problem difficulty levels handled successfully by the user.
-- **Tags Solved**: Provides a comprehensive chart of solved algorithmic categories (e.g., Dynamic Programming, Greedy, Graphs, Math) to show overall expertise.
-
-### 🎛️ Dashboard Page (Authenticated)
-Acts as the central command center, offering direct entry points to two core deep-analytical tools:
-1. **🤖 AI Code Review**
-2. **🔍 Weak-Spot Analytics**
-
----
-
-## 🛠️ Feature Deep-Dive
-
-### 🤖 AI Code Review
-- **Input**: Provide the official Codeforces problem link along with your written C++ solution.
-- **Mechanism**: Automatically fetches and parses the problem description and official contest tutorials using `BeautifulSoup4`.
-- **Feedback**: The LLM evaluates your logic directly against the official tutorial to isolate edge cases, hidden integer overflows, optimization bottlenecks, or potential TLE (Time Limit Exceeded) conditions.
-
-### 🔍 Weak-Spot Analytics & 4-Week Roadmap
-- **Mechanism**: Automatically scans the user's last 100 historical Codeforces submissions to isolate incorrect verdicts (`WA`, `TLE`, `RE`).
-- **Feedback**: Groups failure patterns by direct algorithmic classifications and explicitly outputs a highly personalized, structured **4-Week Action Plan** targeting those identified vulnerabilities.
-
-### 🐳 Production-Ready Deployment
-- Full Dockerization utilizing `python:3.11-slim` to maintain low system memory utilization.
-- Production-grade Gunicorn WSGI server with custom timeouts tailored for external API connections.
-- Seamless static file streaming using WhiteNoise middleware.
-- Persistent external volume mapping to prevent data loss during container rebuilding.
-
----
-
-## 🧱 Tech Stack
-
-| Layer | Technologies |
-|---|---|
-| **Frontend** | HTML, CSS, Bootstrap 5, Vanilla JavaScript |
-| **Backend** | Python, Django 5.2 |
-| **AI Engine** | Groq API (Llama-3.3-70B-Versatile) |
-| **Database** | SQLite3 |
-| **Scraping** | Requests, BeautifulSoup4 |
-| **Deployment** | Docker, Gunicorn, WhiteNoise |
-
----
-
-## 🗂️ Project Structure
+The extension is active only on URLs matching:
 
 ```text
-Algolytics/
-│
+https://codeforces.com/problemset/problem/{contestId}/{index}
+```
+
+Contest URLs under `/contest/` are not supported by the extension.
+
+## Technology
+
+| Area | Technology |
+| --- | --- |
+| Backend | Django 5.2 |
+| Database | PostgreSQL |
+| Frontend | Django templates, Bootstrap, vanilla JavaScript |
+| Extension | Chrome Manifest V3, vanilla JavaScript |
+| External data | Codeforces API and problem pages |
+| AI | Groq-compatible API using `openai/gpt-oss-120b` |
+| Deployment | Docker, Gunicorn, WhiteNoise |
+
+## Project Structure
+
+```text
+CP-Assistant/
 ├── config/
-│   ├── __pycache__/
-│   ├── __init__.py
+│   ├── settings.py       Django configuration
+│   ├── urls.py           Project URL routing
 │   ├── asgi.py
-│   ├── settings.py
-│   ├── urls.py
 │   └── wsgi.py
-│
 ├── core/
-│   ├── __pycache__/
-│   ├── migrations/
-│   ├── __init__.py
-│   ├── admin.py
-│   ├── apps.py
-│   ├── forms.py
-│   ├── models.py
-│   ├── tests.py
-│   ├── urls.py
-│   └── views.py
-│
-├── staticfiles/
-│
+│   ├── models.py         Custom user model
+│   ├── forms.py          Authentication and application forms
+│   ├── views.py          Web views, Codeforces services, AI, and extension API
+│   ├── urls.py            Application routes
+│   ├── tests.py          Backend tests
+│   └── migrations/
+├── extension/
+│   ├── manifest.json
+│   ├── background/
+│   │   └── service-worker.js
+│   ├── content/
+│   │   └── codeforces-problem.js
+│   ├── shared/
+│   │   └── api.js
+│   ├── options/
+│   └── popup/
 ├── templates/
-│   ├── core/
-│   │   ├── code_review.html
-│   │   ├── dashboard.html
-│   │   ├── home.html
-│   │   ├── predict.html
-│   │   ├── profile.html
-│   │   ├── register.html
-│   │   ├── update_profile.html
-│   │   └── weak_spot.html
-│   └── base.html
-│
-├── venv/
-│
-├── .dockerignore
-├── .env
-├── .env.example
-├── .gitignore
-├── db.sqlite3
-├── Dockerfile
-├── LICENSE
+│   ├── base.html
+│   └── core/
 ├── manage.py
-├── README.md
-└── requirements.txt
+├── requirements.txt
+├── Dockerfile
+├── .env.example
+└── README.md
 ```
 
----
+## Backend Features
 
+### Codeforces analytics
 
-## 🧪 Local Setup
+The backend uses Codeforces user rating and submission APIs to calculate:
 
-### 1. Clone Repository
+- Current rating and rating trend
+- Predicted near-term rating values
+- Solved-problem rating distribution
+- Solved-problem tag distribution
+- Exact submission history for a problem
+
+Codeforces responses are cached where appropriate to reduce repeated requests.
+
+### Problem analysis
+
+For a current problem, the extension API returns deterministic analysis based on the problem rating, tags, and the user's submission history:
+
+- Fit classification: `too_easy`, `good_practice`, `stretch`, or `too_hard`
+- Per-tag attempted, solved, failed, and success-rate values
+- Exact problem history and verdict sequence
+
+### Recommendations
+
+Recommendation candidates are retrieved from the Codeforces structured problem API. The backend excludes the current, attempted, and solved problems, then ranks candidates by tag relevance, weak-tag success rate, rating proximity, and reasonable difficulty progression.
+
+The top candidates are supplied to Groq, which selects one candidate. The backend validates the result and falls back to the highest deterministic candidate if the response is invalid. Recommendation results are cached briefly.
+
+### AI code review
+
+The code-review page accepts a Codeforces problem URL and source code. The backend fetches the problem statement and available tutorial content, then sends the review prompt to the configured Groq-compatible API.
+
+AI credentials remain on the backend and are never included in the Chrome Extension.
+
+## Extension
+
+The Chrome Extension uses Manifest V3 and is loaded as an unpacked extension during development.
+
+On supported Codeforces problemset pages it:
+
+1. Detects the contest ID and problem index.
+2. Requests `/api/extension/context/?contest_id={contestId}&index={index}`.
+3. Displays fit, rating, history, tag performance, and recommendation data in an inline panel.
+4. Links directly to the recommended Codeforces problem.
+
+The extension does not inject into contest pages.
+
+## Local Setup
+
+### 1. Create and activate a virtual environment
+
+```powershell
+python -m venv .venv
+.venv\Scripts\activate
+```
+
+On Linux or macOS:
+
 ```bash
-git clone https://github.com/yashgupta1126/Algolytics.git
-cd Algolytics
+python -m venv .venv
+source .venv/bin/activate
 ```
 
-### 2. Create Virtual Environment
-```bash
-python -m venv venv
-```
-**Windows**
-```bash
-venv\Scripts\activate
-```
-**Linux / Mac**
-```bash
-source venv/bin/activate
-```
+### 2. Install dependencies
 
-### 3. Install Dependencies
 ```bash
 pip install -r requirements.txt
 ```
 
-### 4. Create Environment File
-Create a `.env` file in the root directory:
+### 3. Configure environment variables
+
+Copy `.env.example` to `.env` and set real local values. Do not commit `.env`.
+
+Required configuration includes:
+
 ```env
-AI_API_KEY=your_groq_api_key_here
+DJANGO_SECRET_KEY=replace-with-a-long-random-secret
+ALLOWED_HOSTS=127.0.0.1,localhost
+EXTENSION_ALLOWED_ORIGIN=chrome-extension://your-extension-id
+
+DB_NAME=your_database_name
+DB_USER=your_database_user
+DB_PASSWORD=your_database_password
+DB_HOST=localhost
+DB_PORT=5432
+
+AI_API_KEY=your_groq_api_key
 AI_API_URL=https://api.groq.com/openai/v1/chat/completions
-AI_MODEL_NAME=llama-3.3-70b-versatile
-
-EMAIL_USER=your_email@gmail.com
-EMAIL_PASS=your_gmail_app_password
-
-DEBUG=True
-
-SECRET_KEY=django-insecure-your-secret-key-here
+AI_MODEL_NAME=openai/gpt-oss-120b
 ```
 
-### 5. Initialize Database
+Do not place real secrets in `.env.example` or source files.
+
+### 4. Initialize the database
+
 ```bash
-python manage.py makemigrations
 python manage.py migrate
 ```
 
-### 6. Create Admin User
+Create an administrative user when needed:
+
 ```bash
 python manage.py createsuperuser
 ```
 
-### 7. Run Development Server
+### 5. Run the development server
+
 ```bash
 python manage.py runserver
 ```
 
-👉 Visit: **http://127.0.0.1:8000**
+The application is available at `http://127.0.0.1:8000`.
 
----
+## Load the Extension Locally
 
-## 🐳 Docker Deployment
+1. Open `chrome://extensions`.
+2. Enable Developer mode.
+3. Select Load unpacked.
+4. Choose the repository's `extension/` directory.
+5. Reload the extension after changing extension files.
 
-### 1. Create Production Environment File
-Set up your `.env` configuration as detailed above, but toggle production mode:
-```env
-DEBUG=False
+Log in to the Django application, then open a supported Codeforces problemset page.
+
+## Extension API
+
+```text
+GET /api/extension/context/?contest_id={contestId}&index={index}
 ```
 
-### 2. Create Persistent Database File
-**Linux / Mac**
+The authenticated response includes:
+
+- `problem`
+- `problem_history`
+- `problem_analysis`
+- `recommendation`
+- Existing user analytics and weak-tag fields
+
+Invalid problem identifiers and contest-style URLs are rejected.
+
+## Tests and Checks
+
+Run the backend tests:
+
 ```bash
-touch db.sqlite3
-```
-**Windows**
-```bash
-type nul > db.sqlite3
+python manage.py check
+python manage.py test
 ```
 
-### 3. Build Docker Image
+Compile Python files when needed:
+
 ```bash
-docker build -t algolytics .
+python -m py_compile config/settings.py core/views.py core/tests.py
 ```
 
-### 4. Run Container
-**Linux / Mac**
+Validate extension JavaScript:
+
+```powershell
+node --check extension\background\service-worker.js
+node --check extension\content\codeforces-problem.js
+node --check extension\shared\api.js
+node --check extension\popup\popup.js
+node --check extension\options\options.js
+```
+
+## Docker Deployment
+
+The project includes a Dockerfile that installs the Python dependencies, collects static files, and runs Django with Gunicorn on port 8000.
+
+Build the image:
+
+```bash
+docker build -t cp-assistant .
+```
+
+Run it with a production environment file:
+
 ```bash
 docker run -d \
   -p 80:8000 \
   --env-file .env \
-  -v $(pwd)/db.sqlite3:/app/db.sqlite3 \
-  --name algolytics_live \
-  algolytics
-```
-**Windows PowerShell**
-```powershell
-docker run -d `
-  -p 80:8000 `
-  --env-file .env `
-  -v ${PWD}/db.sqlite3:/app/db.sqlite3 `
-  --name algolytics_live `
-  algolytics
+  --name cp-assistant \
+  cp-assistant
 ```
 
-### 5. Run Production Migrations
+Run migrations inside the container:
+
 ```bash
-docker exec -it algolytics_live python manage.py migrate
+docker exec -it cp-assistant python manage.py migrate
 ```
-
-### 6. Create Production Admin
-```bash
-docker exec -it algolytics_live python manage.py createsuperuser
-```
-
-### 7. Access Application
-👉 **http://localhost**
-
----
-
-## 🛡️ Admin Panel
-
-Visit: `/admin`
-
-Admin capabilities include managing active user listings, adjusting custom database objects, and updating or manually overstepping integrated user Codeforces handles.
-
-
----
-
-## 🤝 Contributions
-
-Contributions are welcome! Feel free to fork the repository, open structural issues, or submit pull requests with design upgrades.
-
----
-
-## 📝 Author
-
-**Harsh Sarawagi** | Electrical Engineering, IIT Kanpur
-
-📧 Email: [harsh2342sarawagi@gmail.com](mailto:harsh2342sarawagi@gmail.com)
