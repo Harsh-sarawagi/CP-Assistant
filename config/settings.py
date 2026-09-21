@@ -24,12 +24,16 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-swn#k%jpfx85t=(#7r4o3andcerv_48=38)-6d_sw(@^9hlo_f'
+SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', '')
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = False
 
-ALLOWED_HOSTS = ['*']
+ALLOWED_HOSTS = [
+    host.strip()
+    for host in os.environ.get('ALLOWED_HOSTS', '127.0.0.1,localhost').split(',')
+    if host.strip()
+]
 
 
 # Application definition
@@ -141,3 +145,4 @@ AUTH_USER_MODEL = 'core.CustomUser'
 AI_API_KEY = os.environ.get('AI_API_KEY', '')
 AI_API_URL = os.environ.get('AI_API_URL', 'https://api.groq.com/openai/v1/chat/completions')
 AI_MODEL_NAME = os.environ.get('AI_MODEL_NAME', 'openai/gpt-oss-120b') # <-- Updated
+EXTENSION_ALLOWED_ORIGIN = os.environ.get('EXTENSION_ALLOWED_ORIGIN', '')

@@ -2,18 +2,183 @@
 import requests
 import time
 import re
+import json
 import numpy as np
 import markdown
 from datetime import datetime, timezone
 from sklearn.linear_model import LinearRegression
 from django.conf import settings
 from django.shortcuts import render, redirect
+from django.http import JsonResponse
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
+from django.views.decorators.http import require_GET
 from .forms import CustomRegistrationForm, ProfileUpdateForm, CodeReviewForm
 from bs4 import BeautifulSoup
 from django.core.cache import cache
+
+CODEFORCES_PROBLEM_ID_PATTERN = re.compile(r'^[0-9]+$')
+CODEFORCES_PROBLEM_INDEX_PATTERN = re.compile(r'^[A-Za-z][A-Za-z0-9]*$')
+
+
+def validate_problem_identifier(contest_id, problem_index):
+    if not contest_id or not problem_index:
+        return False
+    return (
+        CODEFORCES_PROBLEM_ID_PATTERN.fullmatch(str(contest_id)) is not None
+        and CODEFORCES_PROBLEM_INDEX_PATTERN.fullmatch(str(problem_index)) is not None
+    )
+
+
+def get_codeforces_problem(contest_id, problem_index):
+    if not validate_problem_identifier(contest_id, problem_index):
+        return None, "Invalid Codeforces problem identifier."
+
+    cache_key = f"cf_problem_{contest_id}_{problem_index.upper()}"
+    cached_problem = cache.get(cache_key)
+    if cached_problem:
+        return cached_problem, None
+
+    try:
+        response = requests.get(
+            "https://codeforces.com/api/problemset.problems",
+            timeout=8
+        ).json()
+        if response.get('status') != 'OK':
+            return None, "Could not fetch Codeforces problem data."
+
+        normalized_index = problem_index.upper()
+        problem = next(
+            (
+                item for item in response.get('result', {}).get('problems', [])
+                if str(item.get('contestId')) == str(contest_id)
+                and str(item.get('index', '')).upper() == normalized_index
+            ),
+            None
+        )
+        if not problem:
+            return None, "Codeforces problem not found."
+
+        structured_problem = {
+            'name': problem.get('name', ''),
+            'rating': problem.get('rating'),
+            'tags': problem.get('tags', []),
+            'url': f"https://codeforces.com/problemset/problem/{contest_id}/{problem.get('index')}"
+        }
+        cache.set(cache_key, structured_problem, timeout=86400)
+        return structured_problem, None
+    except (requests.RequestException, ValueError):
+        return None, "Could not fetch Codeforces problem data."
+
+
+def get_codeforces_problem_pool():
+    cache_key = 'cf_problem_pool'
+    cached_pool = cache.get(cache_key)
+    if cached_pool is not None:
+        return cached_pool, None
+
+    try:
+        response = requests.get(
+            "https://codeforces.com/api/problemset.problems",
+            timeout=8
+        ).json()
+        if response.get('status') != 'OK':
+            return [], "Could not fetch Codeforces problem data."
+
+        problem_pool = []
+        seen = set()
+        for problem in response.get('result', {}).get('problems', []):
+            contest_id = problem.get('contestId')
+            problem_index = problem.get('index')
+            name = problem.get('name')
+            rating = problem.get('rating')
+            tags = problem.get('tags')
+            if not contest_id or not problem_index or not name or not isinstance(rating, int) or not isinstance(tags, list):
+                continue
+
+            problem_key = (str(contest_id), str(problem_index).upper())
+            if problem_key in seen:
+                continue
+            seen.add(problem_key)
+            problem_pool.append({
+                'contest_id': contest_id,
+                'index': problem_index,
+                'name': name,
+                'rating': rating,
+                'tags': tags,
+                'url': f"https://codeforces.com/problemset/problem/{contest_id}/{problem_index}"
+            })
+
+        cache.set(cache_key, problem_pool, timeout=21600)
+        return problem_pool, None
+    except (requests.RequestException, ValueError):
+        return [], "Could not fetch Codeforces problem data."
+
+
+def get_user_problem_history(handle, contest_id, problem_index):
+    if not handle:
+        return {
+            'attempted': False,
+            'solved': False,
+            'attempts': 0,
+            'verdict_history': []
+        }, None
+
+    if not validate_problem_identifier(contest_id, problem_index):
+        return None, "Invalid Codeforces problem identifier."
+
+    cache_key = f"cf_history_{handle}_{contest_id}_{problem_index.upper()}"
+    cached_history = cache.get(cache_key)
+    if cached_history:
+        return cached_history, None
+
+    submissions, submissions_error = get_user_submissions(handle)
+    if submissions_error:
+        return None, submissions_error
+
+    try:
+        normalized_index = problem_index.upper()
+        matching_submissions = [
+            submission for submission in submissions
+            if str(submission.get('problem', {}).get('contestId')) == str(contest_id)
+            and str(submission.get('problem', {}).get('index', '')).upper() == normalized_index
+        ]
+        matching_submissions.sort(key=lambda submission: submission.get('creationTimeSeconds', 0))
+        history = {
+            'attempted': bool(matching_submissions),
+            'solved': any(submission.get('verdict') == 'OK' for submission in matching_submissions),
+            'attempts': len(matching_submissions),
+            'verdict_history': [submission.get('verdict') for submission in matching_submissions]
+        }
+        cache.set(cache_key, history, timeout=300)
+        return history, None
+    except (requests.RequestException, ValueError):
+        return None, "Could not fetch Codeforces submission history."
+
+
+def get_user_submissions(handle):
+    if not handle:
+        return [], None
+
+    cache_key = f"cf_submissions_{handle}"
+    cached_submissions = cache.get(cache_key)
+    if cached_submissions is not None:
+        return cached_submissions, None
+
+    try:
+        response = requests.get(
+            f"https://codeforces.com/api/user.status?handle={handle}",
+            timeout=8
+        ).json()
+        if response.get('status') != 'OK':
+            return [], "Could not fetch Codeforces submission history."
+
+        submissions = response.get('result', [])
+        cache.set(cache_key, submissions, timeout=300)
+        return submissions, None
+    except (requests.RequestException, ValueError):
+        return [], "Could not fetch Codeforces submission history."
 
 def scrape_codeforces_data(url):
     """
@@ -230,82 +395,403 @@ def dashboard_view(request):
     return render(request, 'core/dashboard.html')
 
 
+def get_profile_analytics(handle):
+    if not handle:
+        return None, None
+
+    try:
+        rating_resp = requests.get(f"https://codeforces.com/api/user.rating?handle={handle}", timeout=5).json()
+        time.sleep(0.5)
+        status_resp = requests.get(f"https://codeforces.com/api/user.status?handle={handle}", timeout=8).json()
+
+        if rating_resp.get('status') != 'OK' or status_resp.get('status') != 'OK':
+            return None, "Failed to fetch data from Codeforces."
+
+        contests = rating_resp['result']
+        submissions = status_resp['result']
+        labels, y_list, trend_line, future_preds = [], [], [], []
+        current_rating, next_predicted = 0, 0
+
+        if len(contests) >= 3:
+            X = np.array([i + 1 for i in range(len(contests))]).reshape(-1, 1)
+            y = np.array([c['newRating'] for c in contests])
+            labels = [f"C{i + 1}" for i in range(len(contests))]
+
+            overall_model = LinearRegression().fit(X, y)
+            trend_line = overall_model.predict(X).astype(int).tolist()
+
+            recent_window = min(len(contests), 15)
+            recent_model = LinearRegression().fit(X[-recent_window:], y[-recent_window:])
+            future_X = np.array([len(contests) + 1, len(contests) + 2]).reshape(-1, 1)
+            future_preds = recent_model.predict(future_X).astype(int).tolist()
+
+            labels.extend(["P1", "P2"])
+            y_list = y.tolist()
+            current_rating = int(y[-1])
+            next_predicted = int(future_preds[0])
+
+        unique_solved = {s['problem']['name']: s['problem'] for s in submissions if s.get('verdict') == 'OK'}.values()
+        rating_counts = {}
+        tag_counts = {}
+
+        for problem in unique_solved:
+            if 'rating' in problem:
+                rating = problem['rating']
+                rating_counts[rating] = rating_counts.get(rating, 0) + 1
+            for tag in problem.get('tags', []):
+                tag_counts[tag] = tag_counts.get(tag, 0) + 1
+
+        sorted_ratings = sorted(rating_counts.items())
+        sorted_tags = sorted(tag_counts.items(), key=lambda item: item[1], reverse=True)
+        return {
+            'handle': handle,
+            'ml_labels': labels,
+            'ml_actual': y_list,
+            'ml_trend': trend_line,
+            'ml_future': future_preds,
+            'current_rating': current_rating,
+            'next_predicted': next_predicted,
+            'hist_labels': [str(rating[0]) for rating in sorted_ratings],
+            'hist_data': [rating[1] for rating in sorted_ratings],
+            'pie_labels': [tag[0] for tag in sorted_tags],
+            'pie_data': [tag[1] for tag in sorted_tags],
+            'total_solved': len(unique_solved)
+        }, None
+    except Exception:
+        return None, "Could not load analytics. Please check your network or try again."
+
+
+def get_weak_tags(handle):
+    if not handle:
+        return [], None
+
+    try:
+        response = requests.get(
+            f"https://codeforces.com/api/user.status?handle={handle}&from=1&count=100",
+            timeout=8
+        ).json()
+        if response.get('status') != 'OK':
+            return [], "Failed to fetch submission history from Codeforces."
+
+        failed_verdicts = ['TIME_LIMIT_EXCEEDED', 'WRONG_ANSWER', 'MEMORY_LIMIT_EXCEEDED', 'RUNTIME_ERROR']
+        weak_tags = {}
+        for submission in response['result']:
+            if submission.get('verdict') in failed_verdicts:
+                for tag in submission['problem'].get('tags', []):
+                    weak_tags[tag] = weak_tags.get(tag, 0) + 1
+
+        return [
+            {'tag': tag, 'failures': count}
+            for tag, count in sorted(weak_tags.items(), key=lambda item: item[1], reverse=True)[:5]
+        ], None
+    except Exception:
+        return [], "System Error connecting to Codeforces."
+
+
+def get_problem_tag_performance(problem_tags, submissions):
+    tag_performance = {}
+    for tag in problem_tags:
+        tag_submissions = [
+            submission for submission in submissions
+            if tag in submission.get('problem', {}).get('tags', [])
+        ]
+        attempted = len(tag_submissions)
+        solved = sum(submission.get('verdict') == 'OK' for submission in tag_submissions)
+        failed = attempted - solved
+        tag_performance[tag] = {
+            'attempted': attempted,
+            'solved': solved,
+            'failed': failed,
+            'success_rate': round((solved / attempted) * 100, 2) if attempted else 0
+        }
+    return tag_performance
+
+
+def get_problem_fit(problem_rating, current_rating, submissions):
+    if not problem_rating or not current_rating:
+        return 'good_practice', 'A rating comparison is unavailable, so this is a neutral practice target.'
+
+    difficulty_submissions = [
+        submission for submission in submissions
+        if isinstance(submission.get('problem', {}).get('rating'), int)
+        and abs(submission['problem']['rating'] - problem_rating) <= 100
+    ]
+    difficulty_attempts = len(difficulty_submissions)
+    difficulty_solved = sum(
+        submission.get('verdict') == 'OK' for submission in difficulty_submissions
+    )
+    difficulty_success_rate = (
+        difficulty_solved / difficulty_attempts
+        if difficulty_attempts else None
+    )
+    rating_gap = problem_rating - current_rating
+
+    if rating_gap <= -300:
+        classification = 'too_easy'
+    elif rating_gap >= 300:
+        classification = 'too_hard'
+    elif difficulty_success_rate is not None and difficulty_attempts >= 2:
+        if difficulty_success_rate >= 0.8 and rating_gap <= 100:
+            classification = 'too_easy'
+        elif difficulty_success_rate < 0.4 and rating_gap >= -100:
+            classification = 'too_hard'
+        elif difficulty_success_rate < 0.6 and rating_gap >= -100:
+            classification = 'stretch'
+        elif rating_gap > 100:
+            classification = 'stretch'
+        else:
+            classification = 'good_practice'
+    elif rating_gap > 100:
+        classification = 'stretch'
+    else:
+        classification = 'good_practice'
+
+    if difficulty_success_rate is None:
+        explanation = f'Problem rating is {problem_rating}, {abs(rating_gap)} points {"above" if rating_gap >= 0 else "below"} your current rating.'
+    else:
+        explanation = (
+            f'Problem rating is {problem_rating}, {abs(rating_gap)} points '
+            f'{"above" if rating_gap >= 0 else "below"} your current rating; '
+            f'your success rate in this rating band is {difficulty_success_rate * 100:.0f}%.'
+        )
+    return classification, explanation
+
+
+def build_problem_analysis(problem, profile_data, submissions):
+    problem_tags = problem.get('tags', [])
+    tag_performance = get_problem_tag_performance(problem_tags, submissions)
+    classification, explanation = get_problem_fit(
+        problem.get('rating'),
+        (profile_data or {}).get('current_rating'),
+        submissions
+    )
+    weak_tags = [
+        tag for tag, performance in tag_performance.items()
+        if performance['attempted'] >= 2 and performance['success_rate'] < 50
+    ]
+    if weak_tags:
+        explanation += f' Weak tag based on success rate: {", ".join(weak_tags)}.'
+
+    return {
+        'fit': {
+            'classification': classification,
+            'explanation': explanation
+        },
+        'tag_performance': tag_performance
+    }
+
+
+def get_attempted_problem_keys(submissions):
+    return {
+        (
+            str(submission.get('problem', {}).get('contestId')),
+            str(submission.get('problem', {}).get('index', '')).upper()
+        )
+        for submission in submissions
+        if submission.get('problem', {}).get('contestId') is not None
+        and submission.get('problem', {}).get('index')
+    }
+
+
+def rank_recommendation_candidates(current_problem, contest_id, problem_index, analysis, submissions, current_rating):
+    problem_pool, pool_error = get_codeforces_problem_pool()
+    if pool_error:
+        return [], pool_error
+
+    current_key = (str(contest_id), str(problem_index).upper())
+    attempted_keys = get_attempted_problem_keys(submissions)
+    current_tags = set(current_problem.get('tags', []))
+    tag_performance = analysis.get('tag_performance', {})
+    weak_tags = {
+        tag for tag, performance in tag_performance.items()
+        if performance.get('attempted', 0) >= 2 and performance.get('success_rate', 0) < 50
+    }
+    ranked_candidates = []
+
+    for candidate in problem_pool:
+        candidate_key = (str(candidate['contest_id']), str(candidate['index']).upper())
+        if candidate_key == current_key or candidate_key in attempted_keys:
+            continue
+
+        candidate_tags = set(candidate['tags'])
+        shared_tags = len(current_tags & candidate_tags)
+        weak_tag_overlap = len(weak_tags & candidate_tags)
+        rating_distance = abs(candidate['rating'] - current_rating) if current_rating else 0
+        upward_progression = 1 if current_rating and 0 < candidate['rating'] - current_rating <= 200 else 0
+        large_jump_penalty = 1 if current_rating and candidate['rating'] - current_rating > 300 else 0
+        score = (
+            shared_tags * 1000
+            + weak_tag_overlap * 500
+            + upward_progression * 100
+            - rating_distance
+            - large_jump_penalty * 300
+        )
+        ranked_candidates.append((score, candidate))
+
+    ranked_candidates.sort(
+        key=lambda item: (
+            -item[0],
+            abs(item[1]['rating'] - current_rating) if current_rating else 0,
+            item[1]['contest_id'],
+            item[1]['index']
+        )
+    )
+    return [candidate for _, candidate in ranked_candidates[:5]], None
+
+
+def parse_recommendation_response(content, candidates):
+    if not content:
+        return None
+
+    cleaned_content = re.sub(r'<think>.*?</think>', '', content, flags=re.DOTALL).strip()
+    fenced_match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', cleaned_content, re.DOTALL)
+    json_text = fenced_match.group(1) if fenced_match else cleaned_content
+    try:
+        selected = json.loads(json_text)
+    except (TypeError, ValueError):
+        return None
+
+    selected_key = (str(selected.get('contest_id')), str(selected.get('index', '')).upper())
+    candidate_by_key = {
+        (str(candidate['contest_id']), str(candidate['index']).upper()): candidate
+        for candidate in candidates
+    }
+    candidate = candidate_by_key.get(selected_key)
+    if not candidate:
+        return None
+
+    reason = str(selected.get('reason', '')).strip()
+    if not reason:
+        return None
+    return candidate, reason[:300]
+
+
+def get_recommendation(current_problem, contest_id, problem_index, analysis, submissions, current_rating, handle):
+    cache_key = f"cf_recommendation_{handle}_{contest_id}_{problem_index.upper()}"
+    cache_miss = object()
+    cached_recommendation = cache.get(cache_key, cache_miss)
+    if cached_recommendation is not cache_miss:
+        return cached_recommendation, None
+
+    candidates, candidate_error = rank_recommendation_candidates(
+        current_problem,
+        contest_id,
+        problem_index,
+        analysis,
+        submissions,
+        current_rating
+    )
+    if candidate_error:
+        return None, candidate_error
+    if not candidates:
+        cache.set(cache_key, None, timeout=1200)
+        return None, None
+
+    candidate_context = [
+        {
+            'contest_id': candidate['contest_id'],
+            'index': candidate['index'],
+            'name': candidate['name'],
+            'rating': candidate['rating'],
+            'tags': candidate['tags']
+        }
+        for candidate in candidates
+    ]
+    prompt = (
+        "Choose exactly one Codeforces problem from the supplied candidates. "
+        "Do not invent or modify a candidate. Return JSON only with the keys "
+        "contest_id, index, and reason. Keep reason under 200 characters.\n\n"
+        f"Current problem: {json.dumps(current_problem)}\n"
+        f"User current rating: {current_rating}\n"
+        f"Relevant tag performance: {json.dumps(analysis.get('tag_performance', {}))}\n"
+        f"Candidates: {json.dumps(candidate_context)}"
+    )
+    content, _ = call_ai_engine(prompt)
+    selected = parse_recommendation_response(content, candidates)
+    if selected:
+        selected_candidate, reason = selected
+    else:
+        selected_candidate = candidates[0]
+        reason = 'Best deterministic match for your current problem tags and rating.'
+
+    recommendation = {
+        'problem': selected_candidate,
+        'reason': reason
+    }
+    cache.set(cache_key, recommendation, timeout=1200)
+    return recommendation, None
+
+
+def extension_api_response(request, data, status=200):
+    response = JsonResponse(data, status=status)
+    origin = request.headers.get('Origin', '')
+    configured_origin = getattr(settings, 'EXTENSION_ALLOWED_ORIGIN', '')
+    if configured_origin and origin == configured_origin:
+        response['Access-Control-Allow-Origin'] = origin
+        response['Access-Control-Allow-Credentials'] = 'true'
+        response['Vary'] = 'Origin'
+    return response
+
+
+@require_GET
+def extension_context_api(request):
+    contest_id = request.GET.get('contest_id', '').strip()
+    problem_index = request.GET.get('index', '').strip()
+    if not validate_problem_identifier(contest_id, problem_index):
+        return extension_api_response(request, {
+            'error': 'contest_id and index must identify a Codeforces problemset problem.'
+        }, status=400)
+
+    if not request.user.is_authenticated:
+        return extension_api_response(request, {'authenticated': False}, status=401)
+
+    handle = request.user.codeforces_handle
+    problem, problem_error = get_codeforces_problem(contest_id, problem_index)
+    if problem_error:
+        return extension_api_response(request, {'error': problem_error}, status=404)
+
+    problem_history, problem_history_error = get_user_problem_history(handle, contest_id, problem_index)
+    submissions, submissions_error = get_user_submissions(handle)
+    profile_data, analytics_error = get_profile_analytics(handle)
+    weak_tags, weak_tags_error = get_weak_tags(handle)
+    problem_analysis = build_problem_analysis(problem, profile_data, submissions)
+    recommendation, recommendation_error = get_recommendation(
+        problem,
+        contest_id,
+        problem_index,
+        problem_analysis,
+        submissions,
+        (profile_data or {}).get('current_rating'),
+        handle
+    )
+    return extension_api_response(request, {
+        'authenticated': True,
+        'user': {
+            'username': request.user.username,
+            'codeforces_handle': handle
+        },
+        'problem': problem,
+        'problem_history': problem_history,
+        'problem_analysis': problem_analysis,
+        'recommendation': recommendation,
+        'analytics': profile_data,
+        'weak_tags': weak_tags,
+        'errors': [
+            error for error in (
+                analytics_error,
+                weak_tags_error,
+                problem_history_error,
+                submissions_error,
+                recommendation_error
+            ) if error
+        ]
+    })
+
+
 @login_required(login_url='home')
 def profile_view(request):
     handle = request.user.codeforces_handle
-    profile_data = None
-    error_message = None
-
-    if handle:
-        try:
-            rating_resp = requests.get(f"https://codeforces.com/api/user.rating?handle={handle}", timeout=5).json()
-            time.sleep(0.5) 
-            status_resp = requests.get(f"https://codeforces.com/api/user.status?handle={handle}", timeout=8).json()
-
-            if rating_resp.get('status') == 'OK' and status_resp.get('status') == 'OK':
-                contests = rating_resp['result']
-                submissions = status_resp['result']
-
-                labels, y_list, trend_line, future_preds = [], [], [], []
-                current_rating, next_predicted = 0, 0
-                
-                if len(contests) >= 3:
-                    X = np.array([i+1 for i in range(len(contests))]).reshape(-1, 1)
-                    y = np.array([c['newRating'] for c in contests])
-                    labels = [f"C{i+1}" for i in range(len(contests))]
-                    
-                    overall_model = LinearRegression().fit(X, y)
-                    trend_line = overall_model.predict(X).astype(int).tolist()
-                    
-                    recent_window = min(len(contests), 15)
-                    recent_model = LinearRegression().fit(X[-recent_window:], y[-recent_window:])
-                    
-                    future_X = np.array([len(contests) + 1, len(contests) + 2]).reshape(-1, 1)
-                    future_preds = recent_model.predict(future_X).astype(int).tolist()
-                    
-                    labels.extend(["P1", "P2"])
-                    y_list = y.tolist()
-                    current_rating = int(y[-1])
-                    next_predicted = int(future_preds[0])
-
-                unique_solved = {s['problem']['name']: s['problem'] for s in submissions if s.get('verdict') == 'OK'}.values()
-                
-                rating_counts = {}
-                tag_counts = {}
-                
-                for prob in unique_solved:
-                    if 'rating' in prob:
-                        r = prob['rating']
-                        rating_counts[r] = rating_counts.get(r, 0) + 1
-                    for tag in prob.get('tags', []):
-                        tag_counts[tag] = tag_counts.get(tag, 0) + 1
-
-                sorted_ratings = sorted(rating_counts.items())
-                hist_labels = [str(r[0]) for r in sorted_ratings]
-                hist_data = [r[1] for r in sorted_ratings]
-
-                sorted_tags = sorted(tag_counts.items(), key=lambda item: item[1], reverse=True)
-                pie_labels = [t[0] for t in sorted_tags]
-                pie_data = [t[1] for t in sorted_tags]
-
-                profile_data = {
-                    'handle': handle,
-                    'ml_labels': labels,
-                    'ml_actual': y_list,
-                    'ml_trend': trend_line,
-                    'ml_future': future_preds,
-                    'current_rating': current_rating,
-                    'next_predicted': next_predicted,
-                    'hist_labels': hist_labels,
-                    'hist_data': hist_data,
-                    'pie_labels': pie_labels,
-                    'pie_data': pie_data,
-                    'total_solved': len(unique_solved)
-                }
-            else:
-                error_message = "Failed to fetch data from Codeforces."
-        except Exception as e:
-            error_message = "Could not load analytics. Please check your network or try again."
+    profile_data, error_message = get_profile_analytics(handle)
 
     return render(request, 'core/profile.html', {'profile_data': profile_data, 'error_message': error_message})
 
@@ -399,18 +885,9 @@ def weak_spot_view(request):
 
     if request.method == 'POST':
         try:
-            resp = requests.get(f"https://codeforces.com/api/user.status?handle={handle}&from=1&count=100", timeout=8).json()
-            if resp.get('status') == 'OK':
-                submissions = resp['result']
-                failed_verdicts = ['TIME_LIMIT_EXCEEDED', 'WRONG_ANSWER', 'MEMORY_LIMIT_EXCEEDED', 'RUNTIME_ERROR']
-                failed_subs = [s for s in submissions if s.get('verdict') in failed_verdicts]
-                
-                weak_tags = {}
-                for s in failed_subs:
-                    for tag in s['problem'].get('tags', []):
-                        weak_tags[tag] = weak_tags.get(tag, 0) + 1
-                
-                sorted_weak_tags = sorted(weak_tags.items(), key=lambda item: item[1], reverse=True)[:5]
+            weak_tags, history_error = get_weak_tags(handle)
+            if not history_error:
+                sorted_weak_tags = [(item['tag'], item['failures']) for item in weak_tags]
                 
                 if not sorted_weak_tags:
                     ai_roadmap = "<div class='alert alert-success text-center mt-4'><h4>🎉 Flawless!</h4><p>No failed submissions found in your recent history.</p></div>"
@@ -453,7 +930,7 @@ def weak_spot_view(request):
                     content, _ = call_ai_engine(prompt)
                     ai_roadmap = markdown.markdown(content)
             else:
-                error_message = "Failed to fetch submission history from Codeforces."
+                error_message = history_error
         except Exception as e:
             error_message = "System Error connecting to Codeforces."
             

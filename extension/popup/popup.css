@@ -1,0 +1,33 @@
+:root {
+  color-scheme: light;
+  font-family: Arial, sans-serif;
+}
+
+body {
+  width: 280px;
+  margin: 0;
+  background: #f4f7fb;
+  color: #172033;
+}
+
+.panel {
+  padding: 20px;
+}
+
+h1 {
+  margin: 0 0 12px;
+  font-size: 18px;
+}
+
+.status {
+  margin: 0 0 8px;
+  color: #157347;
+  font-weight: 600;
+}
+
+.hint {
+  margin: 0;
+  color: #526074;
+  font-size: 13px;
+  line-height: 1.4;
+}

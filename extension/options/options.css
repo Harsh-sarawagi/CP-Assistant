@@ -1,0 +1,44 @@
+:root {
+  color-scheme: light;
+  font-family: Arial, sans-serif;
+}
+
+body {
+  margin: 0;
+  background: #f4f7fb;
+  color: #172033;
+}
+
+.settings {
+  width: min(560px, calc(100vw - 48px));
+  margin: 48px auto;
+  padding: 24px;
+  background: #fff;
+  border: 1px solid #d9e1ec;
+}
+
+h1 {
+  margin-top: 0;
+  font-size: 22px;
+}
+
+label,
+input,
+button {
+  display: block;
+}
+
+input {
+  box-sizing: border-box;
+  width: 100%;
+  margin: 8px 0 14px;
+  padding: 9px;
+}
+
+button {
+  padding: 9px 14px;
+}
+
+#status {
+  color: #157347;
+}
