@@ -1,48 +1,72 @@
-# CP Assistant ? Codeforces Profile Analytics
+# CP Assistant
 
-Django 5.2 + PostgreSQL with a Manifest V3 Chrome extension. The extension runs only at
-`https://codeforces.com/profile/{handle}`. It no longer injects on problem or contest pages.
+A Django competitive-programming workspace with Codeforces analytics, on-demand Groq
+feedback, a private notebook and a Manifest V3 Chrome profile companion.
+
+Production: **https://130-210-110-62.sslip.io**. The owner reports the Oracle Ubuntu ARM64
+site, HTTPS/Certbot renewal, AI and extension are working. This repository audit does
+not independently certify the live VM or its backups. See [the final audit](FINAL_AUDIT.md).
 
 ## Features
 
-- Public deterministic profile summaries, rating history/regression estimates, distinct
-  solved-by-rating charts (including unrated), and multi-tag topic performance.
-- Explainable weakness scores with minimum evidence thresholds, final verdict breakdowns,
-  repeated-attempt patterns, and focus topics. Pending submissions are not failures.
-- Deterministic practice candidates: solved exclusion, unseen preference, topic diversity,
-  hard difficulty bounds, and a documented unrated fallback. No AI is needed for these.
-- An optional, authenticated **Generate AI Improvement Plan** button. No automatic Groq calls.
-- Private personal notes shared between extension and website: create, edit, delete,
-  search, topic filter, and latest-update sorting.
-- Website login/registration/profile settings and rating graphs remain available. The new
-  dashboard links analytics, structured AI code review, the notebook and extension connections.
-- Code review shows a monospace problem statement, highlighted original lines, specific
-  suggestions, focus topics and a complete suggested solution. All generated text is escaped.
-- Other profiles show Overview only. Weaknesses, Practice and Notes appear only on the
-  connected account's saved Codeforces profile (case-insensitive handle match).
+- Codeforces rating/rank, distinct solved questions, difficulty distribution, verdicts,
+  acceptance rate, topic coverage and performance graphs.
+- Linear-regression rating estimates, fitted on request from rating history. These are
+  trend extrapolations, not guaranteed contest ratings; fewer than three contests yield
+  no forecast. No external training dataset or stored model artifact is required.
+- Evidence-based weak topics and deterministic practice recommendations. Weakness needs
+  at least five distinct judged problems and eight final submissions per topic.
+- Optional AI improvement plans, generated only after an explicit button click, with
+  three attempts/hour/account, an in-flight lock and a 15-minute successful-result cache.
+- Website AI code review: problem context, original code with line-specific suggestions,
+  complexity, focus topics and complete suggested code. Source is never executed/judged.
+- Private notes shared between website and extension: CRUD, search, topic filter,
+  pagination and stale-edit conflict detection. Ownership is the Django account.
+- Registration, login, profile settings, CSRF-protected POST logout and extension
+  connection/revocation management.
+- Extension Overview on public profiles: vertical rating bars, topic pie and trajectory.
+  Weaknesses, Practice and Notes appear only on the connected account's saved handle.
 
-## Local setup
+The extension runs on `https://codeforces.com/profile/{handle}`, not problem/contest
+pages. The standalone website Weak-Spot tool is retired; old bookmarks redirect to
+profile analytics. Rival comparison is not part of the current feature set.
 
-Use the existing virtual environment, or install the pinned `requirements.txt` in a new one.
-Keep secrets in your ignored local `.env`; never commit them. Required variables:
+## Architecture
 
-```env
-DJANGO_SECRET_KEY=your-long-random-secret
-DB_NAME=your-existing-database
-DB_USER=your-existing-user
-DB_PASSWORD=your-existing-password
-DB_HOST=localhost
-DB_PORT=5432
-ALLOWED_HOSTS=127.0.0.1,localhost
-AI_API_KEY=your-key
-AI_API_URL=https://api.groq.com/openai/v1/chat/completions
-AI_MODEL_NAME=openai/gpt-oss-120b
-EXTENSION_ALLOWED_ORIGIN=chrome-extension://your-actual-32-letter-extension-id
+```mermaid
+flowchart LR
+    Website[Django website] --> Services[Shared analytics and services]
+    CFPage[Codeforces profile / Shadow DOM UI] --> Worker[Extension service worker]
+    Worker -->|HTTPS JSON / public reads| Services
+    Worker -->|PKCE + scoped Bearer| Private[Private notes and plan APIs]
+    Private --> DB[(PostgreSQL 17 production)]
+    Website --> DB
+    Services --> CF[Codeforces API / cached public history]
+    Services -->|Explicit review or plan action only| Groq[Groq API]
+    Private -->|Explicit plan request| Groq
+    Internet[Internet HTTPS] --> Nginx[Nginx + Certbot certificates]
+    Nginx --> Django[Gunicorn / Django / WhiteNoise]
 ```
 
-Replace the extension ID placeholder. An optional `EXTENSION_ALLOWED_IDS` comma-separated
-list permits multiple explicit client IDs. The single origin above is also used to derive
-an allowed ID. Arbitrary redirect destinations and wildcard credentialed CORS are not accepted.
+Django 5.2 LTS, Python 3.11 in Docker, vanilla JavaScript/Manifest V3, Bootstrap/Chart.js,
+NumPy/scikit-learn, requests, BeautifulSoup, WhiteNoise and psycopg2. SQLite is supported
+for local development; production settings always select PostgreSQL. No Redis, Celery,
+Kubernetes or CI/CD pipeline is configured. Nginx is the only published container.
+
+## Local setup (SQLite)
+
+Use Python 3.11+ and Node.js for JavaScript tests. In Windows PowerShell:
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+Copy-Item .env.example .env   # Fresh setup only: never overwrite an existing .env
+```
+
+Edit the ignored `.env`. Set a newly generated random `DJANGO_SECRET_KEY`,
+`DB_ENGINE=sqlite`, loopback `ALLOWED_HOSTS`, and optional AI/extension configuration.
+Generate secrets privately, never in committed files or shared command output.
+The documented `.env.example` contains no real keys. Blank `AI_API_KEY` disables live AI.
 
 ```powershell
 .\.venv\Scripts\python.exe -B manage.py migrate
@@ -50,102 +74,127 @@ an allowed ID. Arbitrary redirect destinations and wildcard credentialed CORS ar
 .\.venv\Scripts\python.exe -B manage.py runserver
 ```
 
-The new additive migration copies historical problem notes into the personal notebook
-and leaves the original records intact. Do not reset the database or delete SQLite backups.
+Open `http://127.0.0.1:8000`. Local DEBUG remains False, so collect static assets and
+restart the local server when introducing new assets. Sign up and save your Codeforces
+handle in profile settings. Back up existing SQLite files before applying migrations;
+this audit did not migrate or transfer any existing local database.
 
-## Extension setup and connection
+For local PostgreSQL, select `DB_ENGINE=postgresql` and set `DB_NAME`, `DB_USER`,
+`DB_PASSWORD`, `DB_HOST`, `DB_PORT`. For compatibility, an existing environment with
+`DB_NAME` and no `DB_ENGINE` keeps PostgreSQL. A fresh environment without either uses
+SQLite. Choosing an engine does not move data between databases. Production ignores a
+local SQLite selection and requires explicit PostgreSQL credentials.
 
-1. Load `extension/` unpacked at `chrome://extensions` in Developer mode; review permissions.
-2. Copy its ID into the allowlist above and restart Django after editing `.env`.
-3. In extension options, configure the backend origin. HTTP is permitted only for loopback
-   development; HTTPS is required elsewhere. Grant the backend host permission if prompted.
-4. Open any Codeforces profile. Overview loads without login, with vertical solved-by-rating
-   bars and a topic pie chart. Topic shares count solved-topic assignments because tags overlap.
-5. Click Connect Account, use the existing Django login/registration, then explicitly approve
-   the extension. The background worker completes PKCE authorization and stores credentials
-   in storage restricted to trusted extension contexts. Codeforces page scripts receive no tokens.
-6. Valid authorization restores after worker/browser restarts. Access lasts 10 minutes;
-   rotating renewal is available until the 30-day grant expires or is revoked. Refresh reuse
-   revokes the entire grant. Disconnect in the extension or revoke on `/extension/connections/`.
+## Chrome extension
 
-Website logout ends its cookie session; extension authorizations are independent. Viewing
-another Codeforces profile changes public analytics and hides the personal tabs; it does not
-change the connected Django account or notebook ownership. Save your handle in profile settings
-to show your personal tabs on that profile. This is a display rule, not proof of Codeforces ownership.
-Changing backend clears local authorization and never forwards old tokens to the new host;
-revoke the old grant on the old website if needed.
+1. Load `extension/` unpacked at `chrome://extensions` with Developer Mode enabled.
+2. Put the displayed 32-letter ID in backend `EXTENSION_ALLOWED_IDS` (comma-separated
+   exact IDs), or use `EXTENSION_ALLOWED_ORIGIN=chrome-extension://<actual-id>`.
+3. Open extension Options. Set **https://130-210-110-62.sslip.io** for production, or
+   `http://127.0.0.1:8000` for local development, and grant the selected host permission.
+4. Open a Codeforces profile and choose **Connect Account**. Log in on the chosen
+   Django backend and explicitly approve. No API keys or passwords belong in extension storage.
+5. Your linked profile shows all four tabs; other profiles show Overview only. Own-profile
+   display is a saved-handle match, not proof of Codeforces ownership.
 
-## Website
+The worker performs PKCE S256 with state checking and a single-use code. Access lasts
+10 minutes; rotating renewal lasts until grant expiry (30 days) or revocation. Tokens
+are hashed in PostgreSQL and stored only in trusted extension contexts. Requests use
+`credentials: omit`; website cookies are used only in the top-level consent flow.
+Backend changes require reconnection. In-flight authorization/refresh cannot bind old
+credentials to a newly selected backend. Website logout ends its session; extension
+access is separate and is revoked using Disconnect or website Connections.
 
-`/profile/` uses the same analytics as the extension. `/notes/` is the shared private notebook.
-`/ai-review/` provides structured code feedback and full suggested code. The separate
-Weak-Spot website tool has been retired; old `/weak-spot/` bookmarks redirect to `/profile/`
-without making an AI request. Shared analytics and extension practice algorithms are unchanged.
-Regression predictions are labeled estimates; topic counts overlap across tags.
+Public analytics are automatic and deterministic. Groq runs only after explicit AI
+review/plan actions. Tab switching and health checks do not generate AI requests.
 
-## Data accuracy and limits
+## Production operation
 
-Profile bundles cache for 5 minutes (30 seconds when practice data fails), the problem pool
-for 6 hours. One user.status response is reused across all analytics tabs. At least 10,000
-returned submissions is conservatively marked potentially truncated; raw histories are not
-returned by the public analytics endpoint. Missing stable IDs are also disclosed. Practice
-recommendations are withheld for incomplete histories so older solved problems are not
-incorrectly presented as unseen.
+Use [the Oracle deployment guide](deploy/README.md) for initial installation and renewal
+commands. The current deployment already exists: **do not repeat fresh-database steps,
+regenerate production secrets, change database passwords, or delete volumes** as an update.
+The temporary [HTTP test mode](deploy/HTTP_TEST.md) intentionally blocks all account
+features and is not the working HTTPS deployment.
 
-Weakness classification requires 5 distinct judged problems and 8 final submissions per tag.
-Score: 65% unsolved-problem rate + 20% unsuccessful-submission rate + 15% repeated-unsuccessful
-signal (unsolved problems with 3+ final attempts). Low samples are not labeled weak.
-Average attempts per solved problem counts all observed final submissions on solved problems.
-Verdicts never establish a particular coding root cause.
+The repository uses PostgreSQL 17 with a persistent named volume and a non-superuser
+application role. Only Nginx publishes ports 80/443. WhiteNoise serves hashed/compressed
+static assets built into the image. No uploaded-media storage is currently required.
+Certbot runs on the VM using its timer; the renewal hook reloads Nginx. The hook assumes
+`/opt/cp-assistant`, so check that path against the working deployment.
 
-Rated practice bounds are current rating ?200, with an 800 minimum and a 1000 upper-bound
-floor for very low ratings. Unrated profiles use observed median attempted difficulty,
-clamped to 800?1400; empty histories start at 800?1000. Lists are deduplicated and stable
-within a cached bundle; attempted unsolved problems fill gaps only after unseen candidates.
-AI improvement plans are limited in PostgreSQL to 3 attempts/hour/account and one active
-request. Successful identical summaries are cached for 15 minutes. Generated text is
-rendered safely; no provider secrets or raw submission histories are sent to the UI.
+For the **1 OCPU VM**, limits are web=1.0, database=1.0 and Nginx=0.5 CPUs. These are
+per-service ceilings, not reserved cores. One Gunicorn process/four I/O threads remains
+configured. No individual service limit exceeds the VM's one-CPU capacity.
 
-## APIs, security, and verification
+Required private production configuration is documented in `.env.production.example`:
+DOMAIN, a strong unique Django secret, application database credentials and database
+administrator password. Exact hosts and HTTPS CSRF origins default to DOMAIN. AI keys
+and extension IDs enable their respective features. Secure cookies, HTTPS redirects,
+trusted proxy scheme handling and DEBUG=False are enforced by `config.production`.
+Never relax CSRF, cookie flags or extension origins to work around connection errors.
 
-See [extension setup](extension/README.md) and the [implementation report](PROFILE_ASSISTANT_REPORT.md)
-for the endpoint table, token lifecycle, baseline results, limitations, and precise Chrome checks.
+Review the VM's actual Compose project name, database mount and environment privately
+before applying repository updates. No SSH inspection was performed in this audit.
+For an already matching deployment, after copying the reviewed release:
+
+```bash
+cd /opt/cp-assistant
+dc() { sudo docker compose --env-file .env.production "$@"; }
+dc config --quiet
+# Preserve your working database and take the existing backup procedure first.
+dc build web
+dc up -d --no-deps web
+dc up -d --no-deps --force-recreate nginx
+dc ps
+```
+
+The audit fixes require no schema migration. For future model changes, inspect
+`migrate --plan`, back up, and approve pending migrations before applying them.
+Never use `down -v` or global volume pruning. Keep backups off the VM and verify restore
+separately. Do not print resolved `compose config` with secrets; use `--quiet`.
+Recreate web after environment changes; a restart alone does not reload Compose variables.
+
+## Verification
 
 ```powershell
-.\.venv\Scripts\python.exe -B manage.py check
-.\.venv\Scripts\python.exe -B manage.py makemigrations --check --dry-run
 .\.venv\Scripts\python.exe -B scripts/verify_project.py
-.\.venv\Scripts\python.exe -B scripts/verify_project.py --postgres
+.\.venv\Scripts\python.exe -B scripts/verify_http_test.py
 node --test extension/tests/extension.test.cjs scripts/tests/code-review.test.cjs
+# Fresh isolated SQLite test DB (does not alter db.sqlite3):
+$env:DB_ENGINE = 'sqlite'
+.\.venv\Scripts\python.exe -B manage.py test core --noinput
+Remove-Item Env:DB_ENGINE
+# Local Docker only: isolated PostgreSQL, temporary TLS, mocked AI, safe cleanup:
+.\.venv\Scripts\python.exe -B scripts/verify_deployment.py
 ```
 
-The runner blocks all external HTTP. `--postgres` runs Django TestCase transactions against
-existing PostgreSQL without creating/dropping a database or flushing tables. Records roll
-back, and table fingerprints are compared before/after. PostgreSQL sequences can advance.
-Avoid concurrent user edits during the comparison. No live paid inference is part of the tests.
+Do not run `scripts/verify_project.py --postgres` against production: that legacy option
+runs rollback tests on the configured database and advances sequences. Prefer the
+isolated Docker verifier. No paid inference is required. Real browser/VM renewal checks
+are separate from mocked tests. [Final audit and release commands](FINAL_AUDIT.md).
 
-## Docker Deployment
+## Troubleshooting and limits
 
-The project includes a Dockerfile that installs the Python dependencies, collects static files, and runs Django with Gunicorn on port 8000.
+- **Extension still targets localhost:** change Options, grant HTTPS host access and
+  reconnect. The localhost default is intentional; no production endpoint is hardcoded.
+- **403/CSRF or extension consent failure:** verify exact DOMAIN/hosts/origins, extension
+  ID, HTTPS proxy headers and matching backend. Keep production secure-cookie settings.
+- **401 after expiry/backend change:** reconnect or let the worker renew; revoked grants
+  cannot be repaired by copying cookies or credentials into the page.
+- **Logout GET returns 405:** refresh old pages; logout is now a CSRF-protected POST.
+- **Missing CSS:** collect static locally; rebuild the production image for new assets.
+- **Database authentication failure after editing passwords:** existing PostgreSQL volumes
+  retain old role passwords. Do not regenerate env files or replace data to bypass this.
+- **Feed unavailable:** the login page stays available when the external contest
+  aggregator returns network errors, malformed JSON or an invalid data shape.
+- **Incomplete Codeforces history:** at 10,000 submissions or missing stable problem IDs,
+  metrics describe the observed subset and recommendations are withheld for safety.
+- **Overlapping topic slices:** pie percentages count solved-topic assignments; a problem
+  can carry several tags. Predictions and AI advice are advisory, not judge verdicts.
+- Public caches/rate counters are process-local and reset on worker restart. AI plan
+  quotas are durable; code review has no equivalent per-account hourly quota. Consider
+  tighter login/review throttling if public usage grows; no new service is needed.
 
-Build the image:
-
-```bash
-docker build -t cp-assistant .
-```
-
-Run it with a production environment file:
-
-```bash
-docker run -d \
-  -p 80:8000 \
-  --env-file .env \
-  --name cp-assistant \
-  cp-assistant
-```
-
-Run migrations inside the container:
-
-```bash
-docker exec -it cp-assistant python manage.py migrate
-```
+Do not commit `.env`, `.env.production`, private keys, databases or backups. If a key
+appears in a chat/screenshot/log, revoke it and update the affected environments privately.
+Ignoring a file does not erase secrets already present in Git history.

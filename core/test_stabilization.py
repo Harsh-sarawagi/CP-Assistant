@@ -103,7 +103,7 @@ class AuthenticationIntegrationTests(TestCase):
         self.assertEqual(self.client.get('/dashboard/').status_code, 200)
         key = self.client.session.session_key
         self.assertTrue(Session.objects.filter(session_key=key).exists())
-        self.client.get('/logout/')
+        self.client.post('/logout/')
         self.assertFalse(Session.objects.filter(session_key=key).exists())
         self.assertEqual(self.client.get('/dashboard/').status_code, 302)
 
@@ -117,6 +117,16 @@ class AuthenticationIntegrationTests(TestCase):
         self.user.refresh_from_db()
         self.assertEqual(self.user.codeforces_handle, handle)
         self.assertEqual(self.user.email, 'updated@example.invalid')
+
+    def test_logout_requires_post_and_valid_csrf(self):
+        client = Client(enforce_csrf_checks=True)
+        client.force_login(self.user)
+        self.assertEqual(client.get('/logout/').status_code, 405)
+        self.assertEqual(client.post('/logout/').status_code, 403)
+        self.assertEqual(client.get('/dashboard/').status_code, 200)
+        token = client.cookies[settings.CSRF_COOKIE_NAME].value
+        self.assertEqual(client.post('/logout/', {'csrfmiddlewaretoken': token}).status_code, 302)
+        self.assertEqual(client.get('/dashboard/').status_code, 302)
 
     def test_expired_sessions_and_unauthorized_requests_never_invoke_ai(self):
         self.client.login(username=self.username, password=self.password)

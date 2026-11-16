@@ -6,6 +6,7 @@ from django.conf import settings
 from django.shortcuts import render, redirect
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
+from django.views.decorators.http import require_POST
 from django.contrib import messages
 from django.utils.http import url_has_allowed_host_and_scheme
 from urllib.parse import urlsplit, urlencode
@@ -234,7 +235,7 @@ def home_view(request):
                     platform_set.add(c.get('platform'))
             platforms = sorted(list(platform_set))
             
-    except requests.RequestException:
+    except (requests.RequestException, ValueError, TypeError, AttributeError):
         pass
 
     return render(request, 'core/home.html', {
@@ -312,6 +313,7 @@ def register_view(request):
     return render(request, 'core/register.html', {'form': form})
 
 
+@require_POST
 def logout_view(request):
     logout(request)
     return redirect('home')

@@ -4,13 +4,20 @@ venv/
 env/
 .env
 .env.*
+*.env
 !.env.example
 !.env.*.example
 *.pem
 *.key
+*.p12
+*.pfx
+id_rsa
+id_ed25519
 .ssh/
 .aws/
 secrets/
+deploy/acme/
+deploy/certificates/
 
 # Python Cache
 __pycache__/
@@ -25,6 +32,19 @@ __pycache__/
 sqlite_data.json
 *.dump
 *.backup
+*.bak
+*.sql.gz
+*.sql.zip
+*.pgdump
+db.sqlite3.*
+*.db
+*.sql
+!core/migrations/*.sql
+!deploy/**/*.sql
+.pgpass
+.pg_service.conf
+.netrc
+.pypirc
 backups/
 
 # Generated application files

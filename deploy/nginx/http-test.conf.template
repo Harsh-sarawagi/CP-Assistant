@@ -1,0 +1,19 @@
+log_format http_test_log '$remote_addr $request_method $uri $status';
+limit_req_zone $binary_remote_addr zone=http_test:1m rate=5r/s;
+server {
+    listen 80 default_server;
+    server_name _;
+    return 444;
+}
+server {
+    listen 80;
+    server_name ${DOMAIN};
+    client_max_body_size 1k;
+    access_log /var/log/nginx/access.log http_test_log;
+    location = /health/ { return 404; }
+    location / {
+        limit_req zone=http_test burst=20 nodelay;
+        limit_req_status 429;
+        include /etc/nginx/proxy.conf;
+    }
+}

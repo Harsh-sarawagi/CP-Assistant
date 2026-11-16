@@ -1,0 +1,31 @@
+# Compose 2.24.4+; never merge this override into a real HTTPS deployment.
+name: cp-assistant-http-test
+services:
+  db:
+    profiles: [database-disabled-in-http-test]
+    entrypoint: ["/bin/sh", "-c", "echo 'Database startup is disabled in HTTP test mode'; exit 1"]
+    volumes: !reset []
+  web:
+    image: cp-assistant-http-test:local
+    environment:
+      DJANGO_SETTINGS_MODULE: config.http_test
+      DOMAIN: "130.210.110.62"
+      ALLOWED_HOSTS: "130.210.110.62"
+      CSRF_TRUSTED_ORIGINS: ""
+      DB_NAME: http_readonly_disabled
+      DB_USER: http_readonly_disabled
+      DB_PASSWORD: unused-http-readonly
+      AI_API_KEY: ""
+      EXTENSION_ALLOWED_IDS: ""
+      EXTENSION_ALLOWED_ORIGIN: ""
+    depends_on: !reset {}
+    networks: !override [frontend]
+  nginx:
+    environment:
+      DOMAIN: "130.210.110.62"
+    volumes: !override
+      - ./deploy/nginx/http-test.conf.template:/etc/nginx/templates/default.conf.template:ro
+      - ./deploy/nginx/proxy.conf:/etc/nginx/proxy.conf:ro
+    ports: !override
+      - "${HTTP_TEST_BIND:-0.0.0.0}:${HTTP_TEST_PORT:-80}:80"
+volumes: !reset {}

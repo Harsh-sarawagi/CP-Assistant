@@ -94,6 +94,15 @@ DATABASES = {
     }
 }
 
+# Fresh local setups use SQLite. Existing DB_* PostgreSQL environments retain their
+# previous backend unless DB_ENGINE is explicitly selected; no data is transferred.
+DB_ENGINE = os.getenv('DB_ENGINE', 'postgresql' if os.getenv('DB_NAME') else 'sqlite').lower()
+if DB_ENGINE == 'sqlite':
+    DATABASES = {'default': {'ENGINE': 'django.db.backends.sqlite3', 'NAME': BASE_DIR / 'db.sqlite3'}}
+elif DB_ENGINE != 'postgresql':
+    from django.core.exceptions import ImproperlyConfigured
+    raise ImproperlyConfigured('DB_ENGINE must be sqlite or postgresql.')
+
 
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
@@ -131,6 +140,10 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
+STORAGES = {
+    'default': {'BACKEND': 'django.core.files.storage.FileSystemStorage'},
+    'staticfiles': {'BACKEND': os.getenv('STATICFILES_STORAGE_BACKEND', 'django.contrib.staticfiles.storage.StaticFilesStorage')},
+}
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field

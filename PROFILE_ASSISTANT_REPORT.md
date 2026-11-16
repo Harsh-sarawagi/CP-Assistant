@@ -1,5 +1,8 @@
 # Codeforces Profile Analytics Assistant — implementation report
 
+For the subsequent production configuration, see [the deployment guide](deploy/README.md).
+Statements below about unchanged deployment files describe the earlier profile/UI task.
+
 Date: 16 November 2026. This report covers the profile-only redesign, shared website
 analytics/notebook, and persistent extension account connection.
 

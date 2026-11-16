@@ -7,6 +7,7 @@ import hmac
 import json
 import re
 import secrets
+import ipaddress
 from urllib.parse import urlsplit
 
 from django.conf import settings
@@ -80,7 +81,14 @@ def body(request):
 
 
 def limit(request, action, maximum=60, seconds=60):
-    key = 'public_limit_' + digest(action + ':' + request.META.get('REMOTE_ADDR', 'unknown'))
+    address = request.META.get('REMOTE_ADDR', 'unknown')
+    # Production Gunicorn is private; Nginx overwrites this header, never appends it.
+    if getattr(settings, 'TRUST_PROXY_IP', False):
+        try:
+            address = str(ipaddress.ip_address(request.headers.get('X-Real-IP', '')))
+        except ValueError:
+            pass
+    key = 'public_limit_' + digest(action + ':' + address)
     if cache.add(key, 1, timeout=seconds):
         return
     try:

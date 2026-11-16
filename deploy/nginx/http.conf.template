@@ -1,0 +1,10 @@
+# Bootstrap only: no login or application is exposed over plain HTTP.
+server {
+    listen 80 default_server;
+    server_name ${DOMAIN};
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+    location / { return 503; }
+    access_log off;
+}

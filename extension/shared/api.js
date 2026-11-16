@@ -12,8 +12,9 @@
     await ready;
     return backendOrigin((await chrome.storage.local.get({ backendUrl: defaultBackendUrl })).backendUrl);
   }
-  async function request(path, options = {}) {
+  async function request(path, options = {}, expectedBackend = null) {
     const backend = await getBackendUrl(), controller = new AbortController();
+    if (expectedBackend && backend !== expectedBackend) throw new Error('Backend changed. Reconnect your account.');
     const timer = setTimeout(() => controller.abort(), path.includes('improvement-plan') ? 90000 : 45000);
     try {
       const response = await fetch(backend + path, { ...options, credentials: 'omit', redirect: 'error', signal: controller.signal,
@@ -27,16 +28,17 @@
       throw error;
     } finally { clearTimeout(timer); }
   }
-  const post = (path, data) => request(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+  const post = (path, data, backend = null) => request(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }, backend);
   async function stored() {
     await ready;
     const auth = (await chrome.storage.local.get('authorization')).authorization;
     if (auth && auth.backendOrigin !== await getBackendUrl()) { await chrome.storage.local.remove('authorization'); return null; }
     return auth || null;
   }
-  async function saveAuthorization(data) {
+  async function saveAuthorization(data, backend) {
     if (!data.access_token || !data.refresh_token || !data.account?.username) throw new Error('Invalid authorization response.');
-    const auth = { ...data, backendOrigin: await getBackendUrl(), expires_at: Date.now() + data.expires_in * 1000 };
+    if (backend !== await getBackendUrl()) throw new Error('Backend changed. Reconnect your account.');
+    const auth = { ...data, backendOrigin: backend, expires_at: Date.now() + data.expires_in * 1000 };
     await chrome.storage.local.set({ authorization: auth });
     return auth;
   }
@@ -44,7 +46,7 @@
     if (refreshPromise) return refreshPromise;
     refreshPromise = (async () => {
       const auth = await stored(); if (!auth) return null;
-      try { return await saveAuthorization(await post('/api/extension/auth/refresh/', { client_id: chrome.runtime.id, refresh_token: auth.refresh_token })); }
+      try { return await saveAuthorization(await post('/api/extension/auth/refresh/', { client_id: chrome.runtime.id, refresh_token: auth.refresh_token }, auth.backendOrigin), auth.backendOrigin); }
       catch (error) { if ([400, 401, 403].includes(error.status)) await chrome.storage.local.remove('authorization'); throw error; }
     })();
     try { return await refreshPromise; } finally { refreshPromise = null; }
@@ -54,7 +56,7 @@
     if (!auth) throw new Error('Connect your Django account to use this feature.');
     if (auth.expires_at <= Date.now() + 30000) auth = await refresh();
     if (!auth) throw new Error('Reconnect your account.');
-    const send = (token) => request(path, { ...options, headers: { ...options.headers, Authorization: `Bearer ${token}` } });
+    const send = (token) => request(path, { ...options, headers: { ...options.headers, Authorization: `Bearer ${token}` } }, auth.backendOrigin);
     try { return await send(auth.access_token); }
     catch (error) {
       if (error.status !== 401) throw error;
@@ -72,11 +74,11 @@
   async function connect() {
     if (connectionPromise) return connectionPromise;
     connectionPromise = (async () => {
+      const expectedBackend = await getBackendUrl();
       const verifier = random(64), state = random(32), redirect = chrome.identity.getRedirectURL('callback');
       const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier));
       const proof = btoa(String.fromCharCode(...new Uint8Array(bytes))).replaceAll('+', '-').replaceAll('/', '_').replaceAll('=', '');
-      const begin = await post('/api/extension/auth/start/', { client_id: chrome.runtime.id, state, code_challenge: proof, code_challenge_method: 'S256', redirect_uri: redirect });
-      const expectedBackend = await getBackendUrl();
+      const begin = await post('/api/extension/auth/start/', { client_id: chrome.runtime.id, state, code_challenge: proof, code_challenge_method: 'S256', redirect_uri: redirect }, expectedBackend);
       if (new URL(begin.authorization_url).origin !== expectedBackend) throw new Error('Unexpected authorization destination.');
       await chrome.storage.local.set({ pendingConnection: { state, verifier, requestId: begin.request_id } });
       try {
@@ -84,7 +86,7 @@
         const url = new URL(returned), expected = new URL(redirect);
         if (url.origin !== expected.origin || url.pathname !== expected.pathname || url.searchParams.get('state') !== state || url.searchParams.get('request_id') !== begin.request_id || !url.searchParams.get('code')) throw new Error('Authorization callback did not match.');
         // Credentials never leave this worker or appear in the profile page DOM.
-        await saveAuthorization(await post('/api/extension/auth/exchange/', { client_id: chrome.runtime.id, request_id: begin.request_id, state, code: url.searchParams.get('code'), code_verifier: verifier }));
+        await saveAuthorization(await post('/api/extension/auth/exchange/', { client_id: chrome.runtime.id, request_id: begin.request_id, state, code: url.searchParams.get('code'), code_verifier: verifier }, expectedBackend), expectedBackend);
         return await status();
       } catch { throw new Error('Connection cancelled or could not be completed. Start Connect Account again.'); }
       finally { await chrome.storage.local.remove('pendingConnection'); }

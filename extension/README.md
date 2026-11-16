@@ -28,6 +28,9 @@ notebook/AI responses are discarded after a profile or account change. Keyboard 
 
 ## Setup
 
+Current production backend: `https://130-210-110-62.sslip.io`. Select it in Options;
+the source localhost default remains for development. Reconnect after changing backend.
+
 1. Start the Django application and apply migrations.
 2. Load this directory unpacked in Chrome Developer mode.
 3. Set `EXTENSION_ALLOWED_ORIGIN=chrome-extension://<actual-id>` in the backend's local

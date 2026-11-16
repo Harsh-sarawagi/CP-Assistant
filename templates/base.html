@@ -23,7 +23,7 @@
                         <li class="nav-item"><a class="nav-link {% if page == 'ai_review' %}active{% endif %}" {% if page == 'ai_review' %}aria-current="page"{% endif %} href="{% url 'ai_review' %}">Code review</a></li>
                         <li class="nav-item"><a class="nav-link {% if page == 'notes' %}active{% endif %}" {% if page == 'notes' %}aria-current="page"{% endif %} href="{% url 'notes' %}">Notebook</a></li>
                         <li class="nav-item"><a class="nav-link {% if page == 'extension_connections' %}active{% endif %}" {% if page == 'extension_connections' %}aria-current="page"{% endif %} href="{% url 'extension_connections' %}">Extension</a></li>
-                        <li class="nav-item"><a class="nav-link text-secondary" href="{% url 'logout' %}">Log out</a></li>
+                        <li class="nav-item"><form method="post" action="{% url 'logout' %}">{% csrf_token %}<button type="submit" class="nav-link text-secondary border-0 bg-transparent">Log out</button></form></li>
                     {% else %}
                         <li class="nav-item"><a class="nav-link" href="{% url 'home' %}">Log in</a></li>
                         <li class="nav-item"><a class="nav-link" href="{% url 'register' %}">Create account</a></li>

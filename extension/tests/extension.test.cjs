@@ -187,6 +187,18 @@ test('revoked refresh clears credentials; backend change never forwards old toke
   const switched = harness({ content: false, store: { ...authStore(), backendUrl: 'https://new.example' } });
   assert.equal((await switched.api.status()).authenticated, false); assert.equal(switched.requests.length, 0);
 });
+
+test('a late refresh response cannot bind old credentials to a newly selected backend', async () => {
+  const h = harness({ content: false, store: authStore({ expires_at: 0 }) });
+  const pending = h.api.status();
+  await until(() => h.pending('/auth/refresh/'));
+  h.storage.backendUrl = 'https://new.example';
+  await h.reply('/auth/refresh/', { access_token: 'rotated-access', refresh_token: 'rotated-refresh', expires_in: 600, account: { username: 'ownerA' } });
+  assert.equal((await pending).authenticated, false);
+  assert.equal(h.requests.length, 1);
+  assert.ok(h.requests.every(request => request.url.startsWith(BASE)));
+  assert.notEqual(h.storage.authorization?.backendOrigin, 'https://new.example');
+});
 test('untrusted messages and problem-page messages are rejected', async () => {
   const h = harness({ content: false });
   assert.equal((await h.dispatch({ type: 'GET_NOTES' }, { id: 'other', url: 'https://codeforces.com/profile/x', frameId: 0 })).refused, true);

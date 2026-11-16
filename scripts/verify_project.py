@@ -34,7 +34,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--postgres', action='store_true', help='Include transactional auth tests on the configured PostgreSQL database')
     args = parser.parse_args()
-    names = ['core.tests', 'core.test_stabilization.AiContractTests']
+    names = ['core.tests', 'core.test_stabilization.AiContractTests', 'core.test_deployment']
     before = None
     if args.postgres:
         if connection.vendor != 'postgresql':
