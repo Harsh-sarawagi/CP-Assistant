@@ -1,34 +1,19 @@
 {% extends 'base.html' %}
-
 {% block content %}
-<div class="container mt-5">
-    <div class="row mb-4">
-        <div class="col-12">
-            <h2>Welcome back, {{ user.username }}!</h2>
-            <p class="text-muted">Select an AI tool to level up your CP game today.</p>
+<div class="container workspace-page">
+    <section class="dashboard-hero">
+        <div class="hero-copy"><p class="eyebrow">YOUR PROGRAMMING WORKSPACE</p><h1>Welcome back, {{ user.username }}.</h1><p class="hero-description">Find the patterns in your progress.<br>Turn each attempt into a better next one.</p>
+            <div class="d-flex flex-wrap gap-2 mt-4"><a href="{% url 'profile' %}" class="btn btn-primary">Explore my analytics <span aria-hidden="true">&rarr;</span></a><a href="{% url 'ai_review' %}" class="btn btn-white">Review a solution</a></div>
         </div>
+        <aside class="workspace-status"><div class="status-icon" aria-hidden="true">&lt;/&gt;</div><p class="eyebrow">CONNECTED PROFILE</p><h2>{{ user.codeforces_handle|default:'Link your handle' }}</h2><p class="small text-secondary">{% if user.codeforces_handle %}Personal tools appear on this profile in the extension.{% else %}Add your Codeforces handle to unlock your personal profile tools.{% endif %}</p><a href="{% url 'update_profile' %}" class="small fw-semibold">Manage profile &rarr;</a><hr><div class="status-counts"><span><strong>{{ note_count }}</strong> saved note{{ note_count|pluralize }}</span><span><strong>{{ connection_count }}</strong> active connection{{ connection_count|pluralize }}</span></div></aside>
+    </section>
+    <div class="section-heading"><div><p class="eyebrow">BUILT AROUND YOUR PRACTICE</p><h2>Your tools, in one place</h2></div><span class="small text-secondary">Analyze. Review. Remember.</span></div>
+    <div class="tool-grid">
+        <article class="tool-card"><div class="tool-icon blue" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 19V9m8 10V4m8 15v-7M2 21h20"/></svg></div><span class="tool-type">PERFORMANCE</span><h3>Profile analytics</h3><p>See your rating trajectory, solved difficulty distribution and topic coverage from Codeforces history.</p><a href="{% url 'profile' %}">Open analytics <span aria-hidden="true">&rarr;</span></a></article>
+        <article class="tool-card"><div class="tool-icon violet" aria-hidden="true">&lt;/&gt;</div><span class="tool-type">FEEDBACK</span><h3>AI code review</h3><p>Inspect line-specific issues, code-writing suggestions and a complete suggested solution beside your original source.</p><a href="{% url 'ai_review' %}">Review my code <span aria-hidden="true">&rarr;</span></a></article>
+        <article class="tool-card"><div class="tool-icon teal" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 3h13v18H6a3 3 0 0 1 0-6h13M6 3a3 3 0 0 0-3 3v12M8 7h7m-7 4h5"/></svg></div><span class="tool-type">REFLECTION</span><h3>Personal notebook</h3><p>Keep mistakes, useful patterns and lessons organized by topic. Your notes stay in sync with the extension.</p><a href="{% url 'notes' %}">Open {{ note_count }} saved note{{ note_count|pluralize }} <span aria-hidden="true">&rarr;</span></a></article>
+        <article class="tool-card"><div class="tool-icon amber" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18m-11 3 3 3-3 3"/></svg></div><span class="tool-type">ON CODEFORCES</span><h3>Profile companion</h3><p>Browse public overviews. On your linked profile, use weaknesses, focused practice and your private notebook.</p><a href="{% url 'extension_connections' %}">Manage connections <span aria-hidden="true">&rarr;</span></a></article>
     </div>
-    
-    <div class="row">
-        <div class="col-md-4 mb-4">
-            <div class="card border-0 shadow-sm h-100 border-start border-primary border-4">
-                <div class="card-body d-flex flex-column">
-                    <h5 class="text-dark mb-3">🤖 AI Code Review</h5>
-                    <p class="text-muted small mb-4">Paste your code to analyze Big-O complexity, catch edge cases, and get optimization suggestions instantly.</p>
-                    <a href="{% url 'ai_review' %}" class="btn btn-outline-primary mt-auto">Open Code Review</a>
-                </div>
-            </div>
-        </div>
-        
-        <div class="col-md-4 mb-4">
-            <div class="card border-0 shadow-sm h-100 border-start border-warning border-4">
-                <div class="card-body d-flex flex-column">
-                    <h5 class="text-dark mb-3">🔍 Weak-Spot Analytics</h5>
-                    <p class="text-muted small mb-4">Analyze recent failures to generate a personalized 4-week algorithmic practice roadmap.</p>
-                    <a href="{% url 'weak_spot' %}" class="btn btn-outline-warning text-dark mt-auto">Generate Roadmap</a>
-                </div>
-            </div>
-        </div>
-    </div>
+    <section class="next-step"><div><p class="eyebrow">A SMALL STEP FOR YOUR NEXT SESSION</p><h2>Review one attempt. Save one lesson.</h2><p>Bring a problem URL and your code. Keep the most useful takeaway in your notebook.</p></div><a href="{% url 'ai_review' %}" class="btn btn-outline-primary">Start a code review &rarr;</a></section>
 </div>
 {% endblock %}

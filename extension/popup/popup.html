@@ -9,10 +9,12 @@
   <body>
     <main class="panel">
       <h1>CP Assistant</h1>
-      <p class="status" id="status">Checking this page...</p>
-      <p class="hint" id="hint">Open a Codeforces problemset page to get started.</p>
+      <p class="status" id="status">Checking connection...</p>
+      <p class="hint" id="hint">Open a Codeforces profile for automatic public analytics.</p>
+      <p><button id="connect" type="button">Connect Account</button><button id="disconnect" type="button" hidden>Disconnect</button></p>
+      <p><a id="register" target="_blank" rel="noopener noreferrer">Register</a> · <a id="dashboard" target="_blank" rel="noopener noreferrer">Website</a></p>
+      <button id="options" type="button">Backend settings</button>
     </main>
-    <script src="../shared/api.js"></script>
     <script src="popup.js"></script>
   </body>
 </html>

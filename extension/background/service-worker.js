@@ -1,39 +1,30 @@
 import '../shared/api.js';
 
-const detectedProblems = new Map();
-
-chrome.runtime.onInstalled.addListener(() => {
-  console.log('CP Assistant extension installed.');
-});
-
+function profileHandle(url) {
+  try { const parsed = new URL(url); const match = parsed.pathname.match(/^\/profile\/([A-Za-z0-9_.-]{1,24})\/?$/); return parsed.origin === 'https://codeforces.com' && match ? match[1] : null; }
+  catch { return null; }
+}
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message.type === 'CODEFORCES_PROBLEM_DETECTED' && sender.tab?.id !== undefined) {
-    detectedProblems.set(sender.tab.id, message.problem);
-    sendResponse({ ok: true });
-    return;
-  }
-
-  if (message.type === 'GET_DETECTED_PROBLEM') {
-    sendResponse({ problem: detectedProblems.get(message.tabId) || null });
-    return;
-  }
-
-  if (message.type === 'GET_PANEL_CONTEXT' && sender.tab?.id !== undefined) {
-    const problem = detectedProblems.get(sender.tab.id) || null;
-    if (!problem) {
-      sendResponse({ context: null, backendUrl: null, problem: null });
-      return;
-    }
-
-    CPAssistantApi.getContext(problem)
-      .then((context) => CPAssistantApi.getBackendUrl().then((backendUrl) => ({ context, backendUrl, problem })))
-      .then((panelContext) => sendResponse(panelContext))
-      .catch(() => sendResponse({ context: null, backendUrl: null, problem }));
-  }
-
+  if (sender.id !== chrome.runtime.id) return false;
+  const internal = sender.url === chrome.runtime.getURL('popup/popup.html') || sender.url === chrome.runtime.getURL('options/options.html');
+  const handle = sender.frameId === 0 ? profileHandle(sender.url) : null;
+  if (!internal && !handle) return false;
+  const validId = (id) => Number.isSafeInteger(id) && id > 0;
+  const handlers = {
+    GET_SETTINGS: () => CPAssistantApi.getSettings(),
+    SET_COLLAPSED: () => CPAssistantApi.setCollapsed(message.collapsed),
+    AUTH_STATUS: () => CPAssistantApi.status(),
+    CONNECT_ACCOUNT: () => CPAssistantApi.connect(),
+    DISCONNECT_ACCOUNT: () => CPAssistantApi.disconnect(),
+    BACKEND_CHANGED: () => internal ? CPAssistantApi.clearConnection() : Promise.reject(new Error('Not allowed.')),
+    GET_PROFILE: () => handle ? CPAssistantApi.publicProfile(handle) : Promise.reject(new Error('Open a Codeforces profile.')),
+    GENERATE_PLAN: () => handle ? CPAssistantApi.plan(handle) : Promise.reject(new Error('Open a Codeforces profile.')),
+    GET_NOTES: () => CPAssistantApi.notes(message.query || {}),
+    SAVE_NOTE: () => !message.id || validId(message.id) ? CPAssistantApi.saveNote(message.payload, message.id) : Promise.reject(new Error('Invalid note.')),
+    DELETE_NOTE: () => validId(message.id) ? CPAssistantApi.deleteNote(message.id, message.updated_at) : Promise.reject(new Error('Invalid note.'))
+  };
+  if (!Object.hasOwn(handlers, message.type)) return false;
+  Promise.resolve().then(handlers[message.type]).then((result) => sendResponse({ result }))
+    .catch((error) => sendResponse({ error: error.message || 'Request failed. Check the backend connection and try again.' }));
   return true;
-});
-
-chrome.tabs.onRemoved.addListener((tabId) => {
-  detectedProblems.delete(tabId);
 });

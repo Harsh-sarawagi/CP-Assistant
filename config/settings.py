@@ -13,6 +13,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 
 from pathlib import Path
 import os
+import re
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -146,3 +147,16 @@ AI_API_KEY = os.environ.get('AI_API_KEY', '')
 AI_API_URL = os.environ.get('AI_API_URL', 'https://api.groq.com/openai/v1/chat/completions')
 AI_MODEL_NAME = os.environ.get('AI_MODEL_NAME', 'openai/gpt-oss-120b') # <-- Updated
 EXTENSION_ALLOWED_ORIGIN = os.environ.get('EXTENSION_ALLOWED_ORIGIN', '')
+
+# Extension writes use scoped Bearer proof, not Django cookies. Website writes and
+# the consent form keep Django's default same-origin CSRF policy.
+
+# Explicit public-extension client allowlist; no wildcard redirect destinations.
+EXTENSION_ALLOWED_IDS = {
+    value.strip() for value in os.environ.get('EXTENSION_ALLOWED_IDS', '').split(',')
+    if re.fullmatch(r'[a-p]{32}', value.strip())
+}
+if re.fullmatch(r'chrome-extension://[a-p]{32}', EXTENSION_ALLOWED_ORIGIN):
+    EXTENSION_ALLOWED_IDS.add(EXTENSION_ALLOWED_ORIGIN.split('://', 1)[1])
+EXTENSION_ACCESS_SECONDS = 600
+EXTENSION_AUTHORIZATION_DAYS = 30

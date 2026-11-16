@@ -1,0 +1,18 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container my-5" style="max-width:700px">
+{% if invalid %}
+<div class="alert alert-warning">This connection request is invalid, expired, or already approved. Start Connect Account again from CP Assistant.</div>
+{% else %}
+<div class="card"><div class="card-body p-4">
+<h1 class="h4">Connect CP Assistant to your account?</h1>
+<p>Signed in as <strong>{{ user.username }}</strong>.</p>
+<p>Extension ID: <code>{{ connection.extension_id }}</code></p>
+<p>This extension will be able to read and manage <strong>your personal notes</strong> and generate AI improvement plans when you request them. Public profile analytics do not require this permission.</p>
+<p>Authorization lasts up to 30 days. You can revoke it in Extension Connections. The Codeforces profile you view does not change this account.</p>
+<form method="post">{% csrf_token %}<input type="hidden" name="state" value="{{ state }}">
+<button name="decision" value="approve" class="btn btn-primary">Approve connection</button>
+<button name="decision" value="deny" class="btn btn-outline-secondary">Cancel</button></form>
+</div></div>{% endif %}
+</div>
+{% endblock %}

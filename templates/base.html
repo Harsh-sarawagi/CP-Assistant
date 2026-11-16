@@ -1,51 +1,43 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Algorithm Analytics</title>
+    <title>{% block title %}CP Assistant | Your programming workspace{% endblock %}</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="{% static 'core/workspace.css' %}" rel="stylesheet">
+    {% block extra_head %}{% endblock %}
 </head>
-<body class="bg-light">
-
-    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+<body>
+    <nav class="navbar navbar-expand-lg workspace-nav" aria-label="Main navigation">
         <div class="container">
-            <a class="navbar-brand fw-bold" href="{% url 'home' %}">&lt;Algolytics/&gt;</a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-                <span class="navbar-toggler-icon"></span>
-            </button>
+            <a class="navbar-brand workspace-brand" href="{% if user.is_authenticated %}{% url 'dashboard' %}{% else %}{% url 'home' %}{% endif %}"><span class="brand-mark" aria-hidden="true">&lt;/&gt;</span> CP Assistant</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation"><span class="navbar-toggler-icon"></span></button>
             <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav ms-auto">
+                <ul class="navbar-nav ms-auto gap-lg-1">
+                    {% with page=request.resolver_match.url_name %}
                     {% if user.is_authenticated %}
-                        <li class="nav-item"><a class="nav-link" href="{% url 'dashboard' %}">Dashboard</a></li>
-                        <li class="nav-item"><a class="nav-link" href="{% url 'profile' %}">Profile Analytics</a></li>
-                        <li class="nav-item"><a class="nav-link text-danger" href="{% url 'logout' %}">Logout</a></li>
+                        <li class="nav-item"><a class="nav-link {% if page == 'dashboard' %}active{% endif %}" {% if page == 'dashboard' %}aria-current="page"{% endif %} href="{% url 'dashboard' %}">Dashboard</a></li>
+                        <li class="nav-item"><a class="nav-link {% if page == 'profile' or page == 'update_profile' %}active{% endif %}" {% if page == 'profile' %}aria-current="page"{% endif %} href="{% url 'profile' %}">Analytics</a></li>
+                        <li class="nav-item"><a class="nav-link {% if page == 'ai_review' %}active{% endif %}" {% if page == 'ai_review' %}aria-current="page"{% endif %} href="{% url 'ai_review' %}">Code review</a></li>
+                        <li class="nav-item"><a class="nav-link {% if page == 'notes' %}active{% endif %}" {% if page == 'notes' %}aria-current="page"{% endif %} href="{% url 'notes' %}">Notebook</a></li>
+                        <li class="nav-item"><a class="nav-link {% if page == 'extension_connections' %}active{% endif %}" {% if page == 'extension_connections' %}aria-current="page"{% endif %} href="{% url 'extension_connections' %}">Extension</a></li>
+                        <li class="nav-item"><a class="nav-link text-secondary" href="{% url 'logout' %}">Log out</a></li>
                     {% else %}
-                        <li class="nav-item"><a class="nav-link" href="{% url 'home' %}">Login</a></li>
+                        <li class="nav-item"><a class="nav-link" href="{% url 'home' %}">Log in</a></li>
+                        <li class="nav-item"><a class="nav-link" href="{% url 'register' %}">Create account</a></li>
                     {% endif %}
+                    {% endwith %}
                 </ul>
             </div>
         </div>
     </nav>
-
-    <main>
-        {% block content %}
-        {% endblock %}
-    </main>
-
+    <main>{% block content %}{% endblock %}</main>
+    <footer class="container workspace-footer"><span>CP Assistant</span><span>Understand your progress. Make your next attempt count.</span></footer>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-
-    <script>
-        MathJax = {
-            tex: {
-                // Tells MathJax to look for single $ for inline math and $$ for display math
-                inlineMath: [['$', '$'], ['\\(', '\\)']],
-                displayMath: [['$$', '$$'], ['\\[', '\\]']]
-            }
-        };
-    </script>
+    <script>MathJax = {tex: {inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$', '$$'], ['\\[', '\\]']]}};</script>
     <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"></script>
-
+    {% block scripts %}{% endblock %}
 </body>
 </html>

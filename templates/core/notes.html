@@ -1,0 +1,14 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container workspace-page"><p class="eyebrow">KEEP THE LESSON, NOT JUST THE VERDICT</p><h1 class="h3">My personal notebook</h1><p class="text-secondary">Private to <strong>{{ user.username }}</strong>. Shared with the Notes tab on your linked Codeforces profile in the extension.</p>
+{% if error %}<div class="alert alert-danger">{{ error }}</div>{% endif %}
+<div class="row"><div class="col-md-5"><div class="card mb-4"><div class="card-body"><h2 class="h5">{% if form.instance.pk %}Edit note{% else %}New note{% endif %}</h2>
+<form method="post">{% csrf_token %}{% if form.instance.pk %}<input type="hidden" name="note_id" value="{{ form.instance.pk }}"><input type="hidden" name="updated_at" value="{{ note_version }}">{% endif %}
+{{ form.as_p }}<button class="btn btn-primary">Save note</button> <a href="{% url 'notes' %}">New / cancel</a></form>
+</div></div></div><div class="col-md-7">
+<form method="get" class="d-flex gap-2 mb-3"><input name="q" class="form-control" placeholder="Search your notes" maxlength="200" value="{{ request.GET.q }}" aria-label="Search notes"><select name="topic" class="form-select" aria-label="Filter by topic"><option value="">All topics</option>{% for topic in notebook.topics %}<option {% if request.GET.topic == topic %}selected{% endif %}>{{ topic }}</option>{% endfor %}</select><button class="btn btn-outline-primary">Filter</button></form>
+<p>{{ notebook.count }} note(s), latest update first.</p>
+{% for note in notebook.results %}<article class="card mb-3"><div class="card-body"><h2 class="h5">{{ note.title }}</h2><p class="small text-muted">{{ note.topic }} · {{ note.updated_at }}</p><div style="white-space:pre-wrap;overflow-wrap:anywhere">{{ note.content }}</div><div class="d-flex gap-3 mt-3"><a href="?edit={{ note.id }}">Edit</a><form method="post" onsubmit="return confirm('Delete this note?')">{% csrf_token %}<input type="hidden" name="action" value="delete"><input type="hidden" name="note_id" value="{{ note.id }}"><input type="hidden" name="updated_at" value="{{ note.updated_at }}"><button class="btn btn-link text-danger p-0">Delete</button></form></div></div></article>{% empty %}<p>No notes match. Create your first note above.</p>{% endfor %}
+{% if notebook.next_page %}<a href="?page={{ notebook.next_page }}&q={{ request.GET.q|urlencode }}&topic={{ request.GET.topic|urlencode }}">Next page</a>{% endif %}
+</div></div></div>
+{% endblock %}

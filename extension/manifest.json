@@ -1,29 +1,28 @@
 {
   "manifest_version": 3,
   "name": "CP Assistant",
-  "version": "0.1.0",
-  "description": "A focused companion for competitive programming practice.",
+  "version": "0.2.0",
+  "minimum_chrome_version": "114",
+  "description": "Public Codeforces profile analytics, focused practice, and your private notebook.",
   "action": {
     "default_title": "CP Assistant",
     "default_popup": "popup/popup.html"
   },
-  "permissions": ["storage", "tabs"],
+  "permissions": ["storage", "identity"],
   "host_permissions": [
-    "http://127.0.0.1:8000/*",
-    "http://localhost:8000/*"
+    "http://127.0.0.1/*",
+    "http://localhost/*"
   ],
   "optional_host_permissions": [
-    "http://*/*",
     "https://*/*"
   ],
   "options_page": "options/options.html",
   "content_scripts": [
     {
       "matches": [
-        "*://codeforces.com/problemset/problem/*",
-        "*://www.codeforces.com/problemset/problem/*"
+        "https://codeforces.com/profile/*"
       ],
-      "js": ["content/codeforces-problem.js"],
+      "js": ["content/codeforces-profile.js"],
       "run_at": "document_idle"
     }
   ],

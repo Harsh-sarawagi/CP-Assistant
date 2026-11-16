@@ -1,237 +1,128 @@
-# CP Assistant
+# CP Assistant ? Codeforces Profile Analytics
 
-CP Assistant is a Django-based competitive programming analytics platform with a Chrome Extension for Codeforces problemset pages.
+Django 5.2 + PostgreSQL with a Manifest V3 Chrome extension. The extension runs only at
+`https://codeforces.com/profile/{handle}`. It no longer injects on problem or contest pages.
 
-The project provides:
+## Features
 
-- Codeforces profile and submission analytics
-- Rating trajectory and solved-problem statistics
-- Weak-tag analysis based on submission history
-- AI-assisted code review using Groq
-- Personalized practice roadmap generation
-- Deterministic problem fit and tag-performance analysis
-- Deterministic candidate filtering with an AI-selected next-problem recommendation
-- An MV3 Chrome Extension with an inline panel on Codeforces problem pages
+- Public deterministic profile summaries, rating history/regression estimates, distinct
+  solved-by-rating charts (including unrated), and multi-tag topic performance.
+- Explainable weakness scores with minimum evidence thresholds, final verdict breakdowns,
+  repeated-attempt patterns, and focus topics. Pending submissions are not failures.
+- Deterministic practice candidates: solved exclusion, unseen preference, topic diversity,
+  hard difficulty bounds, and a documented unrated fallback. No AI is needed for these.
+- An optional, authenticated **Generate AI Improvement Plan** button. No automatic Groq calls.
+- Private personal notes shared between extension and website: create, edit, delete,
+  search, topic filter, and latest-update sorting.
+- Website login/registration/profile settings and rating graphs remain available. The new
+  dashboard links analytics, structured AI code review, the notebook and extension connections.
+- Code review shows a monospace problem statement, highlighted original lines, specific
+  suggestions, focus topics and a complete suggested solution. All generated text is escaped.
+- Other profiles show Overview only. Weaknesses, Practice and Notes appear only on the
+  connected account's saved Codeforces profile (case-insensitive handle match).
 
-The extension is active only on URLs matching:
+## Local setup
 
-```text
-https://codeforces.com/problemset/problem/{contestId}/{index}
-```
-
-Contest URLs under `/contest/` are not supported by the extension.
-
-## Technology
-
-| Area | Technology |
-| --- | --- |
-| Backend | Django 5.2 |
-| Database | PostgreSQL |
-| Frontend | Django templates, Bootstrap, vanilla JavaScript |
-| Extension | Chrome Manifest V3, vanilla JavaScript |
-| External data | Codeforces API and problem pages |
-| AI | Groq-compatible API using `openai/gpt-oss-120b` |
-| Deployment | Docker, Gunicorn, WhiteNoise |
-
-## Project Structure
-
-```text
-CP-Assistant/
-├── config/
-│   ├── settings.py       Django configuration
-│   ├── urls.py           Project URL routing
-│   ├── asgi.py
-│   └── wsgi.py
-├── core/
-│   ├── models.py         Custom user model
-│   ├── forms.py          Authentication and application forms
-│   ├── views.py          Web views, Codeforces services, AI, and extension API
-│   ├── urls.py            Application routes
-│   ├── tests.py          Backend tests
-│   └── migrations/
-├── extension/
-│   ├── manifest.json
-│   ├── background/
-│   │   └── service-worker.js
-│   ├── content/
-│   │   └── codeforces-problem.js
-│   ├── shared/
-│   │   └── api.js
-│   ├── options/
-│   └── popup/
-├── templates/
-│   ├── base.html
-│   └── core/
-├── manage.py
-├── requirements.txt
-├── Dockerfile
-├── .env.example
-└── README.md
-```
-
-## Backend Features
-
-### Codeforces analytics
-
-The backend uses Codeforces user rating and submission APIs to calculate:
-
-- Current rating and rating trend
-- Predicted near-term rating values
-- Solved-problem rating distribution
-- Solved-problem tag distribution
-- Exact submission history for a problem
-
-Codeforces responses are cached where appropriate to reduce repeated requests.
-
-### Problem analysis
-
-For a current problem, the extension API returns deterministic analysis based on the problem rating, tags, and the user's submission history:
-
-- Fit classification: `too_easy`, `good_practice`, `stretch`, or `too_hard`
-- Per-tag attempted, solved, failed, and success-rate values
-- Exact problem history and verdict sequence
-
-### Recommendations
-
-Recommendation candidates are retrieved from the Codeforces structured problem API. The backend excludes the current, attempted, and solved problems, then ranks candidates by tag relevance, weak-tag success rate, rating proximity, and reasonable difficulty progression.
-
-The top candidates are supplied to Groq, which selects one candidate. The backend validates the result and falls back to the highest deterministic candidate if the response is invalid. Recommendation results are cached briefly.
-
-### AI code review
-
-The code-review page accepts a Codeforces problem URL and source code. The backend fetches the problem statement and available tutorial content, then sends the review prompt to the configured Groq-compatible API.
-
-AI credentials remain on the backend and are never included in the Chrome Extension.
-
-## Extension
-
-The Chrome Extension uses Manifest V3 and is loaded as an unpacked extension during development.
-
-On supported Codeforces problemset pages it:
-
-1. Detects the contest ID and problem index.
-2. Requests `/api/extension/context/?contest_id={contestId}&index={index}`.
-3. Displays fit, rating, history, tag performance, and recommendation data in an inline panel.
-4. Links directly to the recommended Codeforces problem.
-
-The extension does not inject into contest pages.
-
-## Local Setup
-
-### 1. Create and activate a virtual environment
-
-```powershell
-python -m venv .venv
-.venv\Scripts\activate
-```
-
-On Linux or macOS:
-
-```bash
-python -m venv .venv
-source .venv/bin/activate
-```
-
-### 2. Install dependencies
-
-```bash
-pip install -r requirements.txt
-```
-
-### 3. Configure environment variables
-
-Copy `.env.example` to `.env` and set real local values. Do not commit `.env`.
-
-Required configuration includes:
+Use the existing virtual environment, or install the pinned `requirements.txt` in a new one.
+Keep secrets in your ignored local `.env`; never commit them. Required variables:
 
 ```env
-DJANGO_SECRET_KEY=replace-with-a-long-random-secret
-ALLOWED_HOSTS=127.0.0.1,localhost
-EXTENSION_ALLOWED_ORIGIN=chrome-extension://your-extension-id
-
-DB_NAME=your_database_name
-DB_USER=your_database_user
-DB_PASSWORD=your_database_password
+DJANGO_SECRET_KEY=your-long-random-secret
+DB_NAME=your-existing-database
+DB_USER=your-existing-user
+DB_PASSWORD=your-existing-password
 DB_HOST=localhost
 DB_PORT=5432
-
-AI_API_KEY=your_groq_api_key
+ALLOWED_HOSTS=127.0.0.1,localhost
+AI_API_KEY=your-key
 AI_API_URL=https://api.groq.com/openai/v1/chat/completions
 AI_MODEL_NAME=openai/gpt-oss-120b
+EXTENSION_ALLOWED_ORIGIN=chrome-extension://your-actual-32-letter-extension-id
 ```
 
-Do not place real secrets in `.env.example` or source files.
-
-### 4. Initialize the database
-
-```bash
-python manage.py migrate
-```
-
-Create an administrative user when needed:
-
-```bash
-python manage.py createsuperuser
-```
-
-### 5. Run the development server
-
-```bash
-python manage.py runserver
-```
-
-The application is available at `http://127.0.0.1:8000`.
-
-## Load the Extension Locally
-
-1. Open `chrome://extensions`.
-2. Enable Developer mode.
-3. Select Load unpacked.
-4. Choose the repository's `extension/` directory.
-5. Reload the extension after changing extension files.
-
-Log in to the Django application, then open a supported Codeforces problemset page.
-
-## Extension API
-
-```text
-GET /api/extension/context/?contest_id={contestId}&index={index}
-```
-
-The authenticated response includes:
-
-- `problem`
-- `problem_history`
-- `problem_analysis`
-- `recommendation`
-- Existing user analytics and weak-tag fields
-
-Invalid problem identifiers and contest-style URLs are rejected.
-
-## Tests and Checks
-
-Run the backend tests:
-
-```bash
-python manage.py check
-python manage.py test
-```
-
-Compile Python files when needed:
-
-```bash
-python -m py_compile config/settings.py core/views.py core/tests.py
-```
-
-Validate extension JavaScript:
+Replace the extension ID placeholder. An optional `EXTENSION_ALLOWED_IDS` comma-separated
+list permits multiple explicit client IDs. The single origin above is also used to derive
+an allowed ID. Arbitrary redirect destinations and wildcard credentialed CORS are not accepted.
 
 ```powershell
-node --check extension\background\service-worker.js
-node --check extension\content\codeforces-problem.js
-node --check extension\shared\api.js
-node --check extension\popup\popup.js
-node --check extension\options\options.js
+.\.venv\Scripts\python.exe -B manage.py migrate
+.\.venv\Scripts\python.exe -B manage.py collectstatic --noinput
+.\.venv\Scripts\python.exe -B manage.py runserver
 ```
+
+The new additive migration copies historical problem notes into the personal notebook
+and leaves the original records intact. Do not reset the database or delete SQLite backups.
+
+## Extension setup and connection
+
+1. Load `extension/` unpacked at `chrome://extensions` in Developer mode; review permissions.
+2. Copy its ID into the allowlist above and restart Django after editing `.env`.
+3. In extension options, configure the backend origin. HTTP is permitted only for loopback
+   development; HTTPS is required elsewhere. Grant the backend host permission if prompted.
+4. Open any Codeforces profile. Overview loads without login, with vertical solved-by-rating
+   bars and a topic pie chart. Topic shares count solved-topic assignments because tags overlap.
+5. Click Connect Account, use the existing Django login/registration, then explicitly approve
+   the extension. The background worker completes PKCE authorization and stores credentials
+   in storage restricted to trusted extension contexts. Codeforces page scripts receive no tokens.
+6. Valid authorization restores after worker/browser restarts. Access lasts 10 minutes;
+   rotating renewal is available until the 30-day grant expires or is revoked. Refresh reuse
+   revokes the entire grant. Disconnect in the extension or revoke on `/extension/connections/`.
+
+Website logout ends its cookie session; extension authorizations are independent. Viewing
+another Codeforces profile changes public analytics and hides the personal tabs; it does not
+change the connected Django account or notebook ownership. Save your handle in profile settings
+to show your personal tabs on that profile. This is a display rule, not proof of Codeforces ownership.
+Changing backend clears local authorization and never forwards old tokens to the new host;
+revoke the old grant on the old website if needed.
+
+## Website
+
+`/profile/` uses the same analytics as the extension. `/notes/` is the shared private notebook.
+`/ai-review/` provides structured code feedback and full suggested code. The separate
+Weak-Spot website tool has been retired; old `/weak-spot/` bookmarks redirect to `/profile/`
+without making an AI request. Shared analytics and extension practice algorithms are unchanged.
+Regression predictions are labeled estimates; topic counts overlap across tags.
+
+## Data accuracy and limits
+
+Profile bundles cache for 5 minutes (30 seconds when practice data fails), the problem pool
+for 6 hours. One user.status response is reused across all analytics tabs. At least 10,000
+returned submissions is conservatively marked potentially truncated; raw histories are not
+returned by the public analytics endpoint. Missing stable IDs are also disclosed. Practice
+recommendations are withheld for incomplete histories so older solved problems are not
+incorrectly presented as unseen.
+
+Weakness classification requires 5 distinct judged problems and 8 final submissions per tag.
+Score: 65% unsolved-problem rate + 20% unsuccessful-submission rate + 15% repeated-unsuccessful
+signal (unsolved problems with 3+ final attempts). Low samples are not labeled weak.
+Average attempts per solved problem counts all observed final submissions on solved problems.
+Verdicts never establish a particular coding root cause.
+
+Rated practice bounds are current rating ?200, with an 800 minimum and a 1000 upper-bound
+floor for very low ratings. Unrated profiles use observed median attempted difficulty,
+clamped to 800?1400; empty histories start at 800?1000. Lists are deduplicated and stable
+within a cached bundle; attempted unsolved problems fill gaps only after unseen candidates.
+AI improvement plans are limited in PostgreSQL to 3 attempts/hour/account and one active
+request. Successful identical summaries are cached for 15 minutes. Generated text is
+rendered safely; no provider secrets or raw submission histories are sent to the UI.
+
+## APIs, security, and verification
+
+See [extension setup](extension/README.md) and the [implementation report](PROFILE_ASSISTANT_REPORT.md)
+for the endpoint table, token lifecycle, baseline results, limitations, and precise Chrome checks.
+
+```powershell
+.\.venv\Scripts\python.exe -B manage.py check
+.\.venv\Scripts\python.exe -B manage.py makemigrations --check --dry-run
+.\.venv\Scripts\python.exe -B scripts/verify_project.py
+.\.venv\Scripts\python.exe -B scripts/verify_project.py --postgres
+node --test extension/tests/extension.test.cjs scripts/tests/code-review.test.cjs
+```
+
+The runner blocks all external HTTP. `--postgres` runs Django TestCase transactions against
+existing PostgreSQL without creating/dropping a database or flushing tables. Records roll
+back, and table fingerprints are compared before/after. PostgreSQL sequences can advance.
+Avoid concurrent user edits during the comparison. No live paid inference is part of the tests.
 
 ## Docker Deployment
 

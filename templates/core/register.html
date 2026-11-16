@@ -11,6 +11,7 @@
                 <div class="card-body p-4">
                     <form method="POST" novalidate>
                         {% csrf_token %}
+                        <input type="hidden" name="next" value="{{ request.GET.next }}">
                         
                         {% for field in form %}
                             <div class="mb-3">
@@ -39,7 +40,7 @@
                         <button type="submit" class="btn btn-primary w-100 mt-3">Register</button>
                     </form>
                     <div class="mt-3 text-center">
-                        <small class="text-muted">Already have an account? <a href="{% url 'home' %}">Login here</a></small>
+                        <small class="text-muted">Already have an account? <a href="{% url 'home' %}?next={{ request.GET.next|urlencode }}">Login here</a></small>
                     </div>
                 </div>
             </div>

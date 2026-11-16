@@ -18,7 +18,7 @@
                 <h4 class="mb-1">{{ user.username }}</h4>
                 <p class="text-muted small mb-3">Codeforces: {{ user.codeforces_handle|default:"Not linked" }}</p>
                 {% if profile_data %}
-                    <span class="badge bg-primary fs-6 mb-3">Total Solved: {{ profile_data.total_solved }}</span>
+                    <span class="badge bg-primary fs-6 mb-3">{% if profile_data.history.complete %}Total{% else %}Observed{% endif %} Solved: {{ profile_data.total_solved }}</span>
                 {% endif %}
                 <hr>
                 <a href="{% url 'update_profile' %}" class="btn btn-outline-secondary btn-sm w-100">Update Profile Settings</a>
@@ -35,10 +35,10 @@
                 
                 <div class="card border-0 shadow-sm mb-4">
                     <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
-                        <h6 class="mb-0">📈 ML Rating Trajectory</h6>
+                        <h6 class="mb-0">Rating history and regression estimate</h6>
                         <div>
                             <span class="badge bg-light text-dark me-2">Current: {{ profile_data.current_rating }}</span>
-                            <span class="badge bg-success">Predicted: {{ profile_data.next_predicted }}</span>
+                            <span class="badge bg-success">Estimate: {{ profile_data.next_predicted|default_if_none:"Not enough contests" }}</span>
                         </div>
                     </div>
                     <div class="card-body">
@@ -77,9 +77,11 @@
                     
                     // --- 1. ML Line Chart ---
                     const histLen = data.ml_actual.length;
-                    const paddedPreds = Array(histLen - 1).fill(null);
-                    paddedPreds.push(data.ml_actual[histLen - 1]);
-                    paddedPreds.push(...data.ml_future);
+                    const paddedPreds = [];
+                    if (histLen && data.ml_future.length) {
+                        paddedPreds.push(...Array(histLen - 1).fill(null));
+                        paddedPreds.push(data.ml_actual[histLen - 1], ...data.ml_future);
+                    }
 
                     new Chart(document.getElementById('mlChart').getContext('2d'), {
                         type: 'line',
@@ -102,7 +104,7 @@
                                     pointRadius: 0
                                 },
                                 {
-                                    label: 'Prediction',
+                                    label: 'Regression estimate (not guaranteed)',
                                     data: paddedPreds,
                                     borderColor: '#198754',
                                     borderWidth: 2,
@@ -133,11 +135,11 @@
 
                     // --- 3. Tags Pie Chart ---
                     new Chart(document.getElementById('tagsPieChart').getContext('2d'), {
-                        type: 'doughnut',
+                        type: 'bar',
                         data: {
-                            labels: data.pie_labels,
+                            labels: data.pie_labels.slice(0, 12),
                             datasets: [{
-                                data: data.pie_data,
+                                data: data.pie_data.slice(0, 12),
                                 // Let Chart.js auto-generate a vibrant color palette for the many tags
                                 backgroundColor: [
                                     '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40', 
@@ -147,13 +149,15 @@
                             }]
                         },
                         options: { 
-                            responsive: true, 
+                            responsive: true, indexAxis: 'y',
                             plugins: { 
                                 legend: { display: false } // Hide legend to save space, use tooltips instead
                             } 
                         }
                     });
                 </script>
+
+                {% include 'core/profile_details.html' %}
 
             {% else %}
                 <div class="alert alert-warning text-center mt-4">

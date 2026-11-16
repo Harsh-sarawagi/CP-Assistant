@@ -101,6 +101,7 @@
                     <div class="card-body">
                         <form action="{% url 'home' %}" method="POST">
                             {% csrf_token %}
+                            <input type="hidden" name="next" value="{{ request.GET.next }}">
                             <div class="mb-3">
                                 <label class="form-label">Username</label>
                                 <input type="text" name="username" class="form-control" required>
@@ -112,7 +113,7 @@
                             <button type="submit" class="btn btn-primary w-100">Login</button>
 
                             <div class="text-center mt-3">
-                                <a href="{% url 'register' %}" class="text-decoration-none">
+                                <a href="{% url 'register' %}?next={{ request.GET.next|urlencode }}" class="text-decoration-none">
                                     Create Account
                                 </a>
                             </div>
@@ -123,7 +124,7 @@
                 <div class="card shadow-sm border-0 bg-primary text-white">
                     <div class="card-body text-center py-5">
                         <h4>Welcome back, {{ user.username }}!</h4>
-                        <p class="mb-4">Access AI code reviews and generate your weak-spot practice roadmap.</p>
+                        <p class="mb-4">Explore your analytics, review your code, and keep lessons in your personal notebook.</p>
                         <a href="{% url 'dashboard' %}" class="btn btn-light fw-bold w-100">
                             Go to Dashboard
                         </a>

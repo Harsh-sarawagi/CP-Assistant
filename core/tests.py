@@ -1,271 +1,172 @@
-from types import SimpleNamespace
-from unittest.mock import patch
-import json
-
-from django.test import RequestFactory, SimpleTestCase
+"""Pure/stateless analytics tests; no database or live API calls."""
+from unittest.mock import Mock, patch
+import requests
 from django.core.cache import cache
+from django.test import SimpleTestCase
 
-from . import views
-
-
-class ExtensionProblemApiTests(SimpleTestCase):
-	def setUp(self):
-		self.factory = RequestFactory()
-
-	def test_rejects_missing_or_contest_style_problem_identifier(self):
-		request = self.factory.get('/api/extension/context/?url=https://codeforces.com/contest/123/problem/A')
-		response = views.extension_context_api(request)
-
-		self.assertEqual(response.status_code, 400)
-
-	@patch('core.views.get_weak_tags', return_value=([], None))
-	@patch('core.views.get_profile_analytics', return_value=({'current_rating': 1400}, None))
-	@patch('core.views.get_user_submissions', return_value=([], None))
-	@patch('core.views.get_user_problem_history')
-	@patch('core.views.get_codeforces_problem')
-	@patch('core.views.get_recommendation', return_value=(None, None))
-	def test_returns_problem_and_exact_history(
-		self,
-		get_recommendation,
-		get_problem,
-		get_history,
-		get_submissions,
-		get_profile,
-		get_weak_tags
-	):
-		get_problem.return_value = ({
-			'name': 'Example Problem',
-			'rating': 1200,
-			'tags': ['math'],
-			'url': 'https://codeforces.com/problemset/problem/123/A'
-		}, None)
-		get_history.return_value = ({
-			'attempted': True,
-			'solved': True,
-			'attempts': 2,
-			'verdict_history': ['WRONG_ANSWER', 'OK']
-		}, None)
-		request = self.factory.get('/api/extension/context/?contest_id=123&index=A')
-		request.user = SimpleNamespace(
-			is_authenticated=True,
-			username='tester',
-			codeforces_handle='tourist'
-		)
-
-		response = views.extension_context_api(request)
-		payload = json.loads(response.content)
-
-		self.assertEqual(response.status_code, 200)
-		self.assertEqual(payload['problem']['rating'], 1200)
-		self.assertEqual(payload['problem_history']['attempts'], 2)
-		self.assertIn('problem_analysis', payload)
-		get_problem.assert_called_once_with('123', 'A')
-		get_history.assert_called_once_with('tourist', '123', 'A')
+from .services.analytics import analyze_profile, recommend_problems, rating_series, valid_handle
+from .services.codeforces import get_profile, get_api, CodeforcesError, public_profile
+from .services.safe_markdown import safe_markdown
 
 
-class ProblemAnalysisTests(SimpleTestCase):
-	def test_no_history_returns_zero_tag_attempts(self):
-		analysis = views.build_problem_analysis(
-			{'rating': 1400, 'tags': ['math', 'graphs']},
-			{'current_rating': 1400},
-			[]
-		)
-
-		self.assertEqual(analysis['fit']['classification'], 'good_practice')
-		self.assertEqual(analysis['tag_performance']['math']['attempted'], 0)
-		self.assertEqual(analysis['tag_performance']['math']['success_rate'], 0)
-		self.assertEqual(analysis['tag_performance']['graphs']['failed'], 0)
-
-	def test_solved_problem_history(self):
-		submissions = [
-			{'problem': {'contestId': 123, 'index': 'A'}, 'verdict': 'WRONG_ANSWER'},
-			{'problem': {'contestId': 123, 'index': 'A'}, 'verdict': 'OK'}
-		]
-
-		with patch('core.views.get_user_submissions', return_value=(submissions, None)):
-			history, error = views.get_user_problem_history('tourist', '123', 'A')
-
-		self.assertIsNone(error)
-		self.assertEqual(history['attempts'], 2)
-		self.assertTrue(history['solved'])
-		self.assertEqual(history['verdict_history'], ['WRONG_ANSWER', 'OK'])
-
-	def test_failed_attempts_are_counted_as_failed(self):
-		submissions = [
-			{'problem': {'tags': ['math']}, 'verdict': 'WRONG_ANSWER'},
-			{'problem': {'tags': ['math']}, 'verdict': 'TIME_LIMIT_EXCEEDED'},
-		]
-		analysis = views.build_problem_analysis(
-			{'rating': 1400, 'tags': ['math']},
-			{'current_rating': 1400},
-			submissions
-		)
-
-		self.assertEqual(analysis['tag_performance']['math']['failed'], 2)
-		self.assertEqual(analysis['tag_performance']['math']['success_rate'], 0)
-		self.assertIn('math', analysis['fit']['explanation'])
-
-	def test_multiple_tags_have_independent_performance(self):
-		submissions = [
-			{'problem': {'tags': ['math', 'dp']}, 'verdict': 'OK'},
-			{'problem': {'tags': ['math']}, 'verdict': 'WRONG_ANSWER'},
-			{'problem': {'tags': ['dp']}, 'verdict': 'OK'},
-		]
-		analysis = views.build_problem_analysis(
-			{'rating': 1400, 'tags': ['math', 'dp', 'graphs']},
-			{'current_rating': 1400},
-			submissions
-		)
-
-		self.assertEqual(analysis['tag_performance']['math']['success_rate'], 50.0)
-		self.assertEqual(analysis['tag_performance']['dp']['success_rate'], 100.0)
-		self.assertEqual(analysis['tag_performance']['graphs']['attempted'], 0)
-
-	def test_rating_situations_are_classified_deterministically(self):
-		self.assertEqual(views.get_problem_fit(1000, 1400, [])[0], 'too_easy')
-		self.assertEqual(views.get_problem_fit(1500, 1400, [])[0], 'good_practice')
-		self.assertEqual(views.get_problem_fit(1600, 1400, [])[0], 'stretch')
-		self.assertEqual(views.get_problem_fit(1800, 1400, [])[0], 'too_hard')
+def sub(contest=1, index='A', verdict='OK', tags=None, rating=1000, **extra):
+    problem = {'contestId': contest, 'index': index, 'name': 'Same name', 'tags': tags or ['math']}
+    if rating is not None:
+        problem['rating'] = rating
+    return {'problem': problem, 'verdict': verdict, **extra}
 
 
-class RecommendationTests(SimpleTestCase):
-	def setUp(self):
-		cache.clear()
-		self.current_problem = {
-			'name': 'Current',
-			'rating': 1400,
-			'tags': ['dp', 'graphs'],
-			'url': 'https://codeforces.com/problemset/problem/1/A'
-		}
-		self.analysis = {
-			'tag_performance': {
-				'dp': {'attempted': 4, 'solved': 1, 'failed': 3, 'success_rate': 25.0},
-				'graphs': {'attempted': 2, 'solved': 2, 'failed': 0, 'success_rate': 100.0}
-			}
-		}
+def profile(rows=None, rating=1200, handle='example'):
+    return analyze_profile({'handle': handle, 'rating': rating, 'maxRating': rating, 'rank': 'pupil'}, [], rows or [])
 
-	def test_excludes_current_attempted_and_solved_problems(self):
-		pool = [
-			{'contest_id': 1, 'index': 'A', 'name': 'Current', 'rating': 1400, 'tags': ['dp'], 'url': 'current'},
-			{'contest_id': 2, 'index': 'A', 'name': 'Attempted', 'rating': 1400, 'tags': ['dp'], 'url': 'attempted'},
-			{'contest_id': 3, 'index': 'A', 'name': 'Fresh', 'rating': 1400, 'tags': ['dp'], 'url': 'fresh'}
-		]
-		submissions = [
-			{'problem': {'contestId': 2, 'index': 'A'}, 'verdict': 'WRONG_ANSWER'},
-			{'problem': {'contestId': 4, 'index': 'A'}, 'verdict': 'OK'}
-		]
-		with patch('core.views.get_codeforces_problem_pool', return_value=(pool, None)):
-			candidates, error = views.rank_recommendation_candidates(
-				self.current_problem, '1', 'A', self.analysis, submissions, 1400
-			)
 
-		self.assertIsNone(error)
-		self.assertEqual([(item['contest_id'], item['index']) for item in candidates], [(3, 'A')])
+class ProfileAnalyticsTests(SimpleTestCase):
+    def test_empty_unrated_history(self):
+        p = profile(rating=None)
+        self.assertIsNone(p['summary']['rating'])
+        self.assertEqual(p['summary']['unique_solved'], 0)
+        self.assertIsNone(p['summary']['acceptance_rate'])
+        self.assertEqual(p['rating']['estimate'], [])
+        self.assertFalse(any(t['evidence_sufficient'] for t in p['focus_topics']))
 
-	def test_tag_overlap_affects_deterministic_ranking(self):
-		pool = [
-			{'contest_id': 2, 'index': 'A', 'name': 'No overlap', 'rating': 1400, 'tags': ['math'], 'url': 'no'},
-			{'contest_id': 3, 'index': 'A', 'name': 'Tag overlap', 'rating': 1400, 'tags': ['graphs'], 'url': 'yes'}
-		]
-		with patch('core.views.get_codeforces_problem_pool', return_value=(pool, None)):
-			candidates, _ = views.rank_recommendation_candidates(
-				self.current_problem, '1', 'A', self.analysis, [], 1400
-			)
+    def test_short_and_normal_regression_history(self):
+        for ratings in [[], [1000], [1000, 1100], [1000, 1100, 1200]]:
+            series = rating_series([{'newRating': n} for n in ratings])
+            self.assertEqual(series['actual'], ratings)
+            self.assertEqual(series['estimate'], [1300, 1400] if len(ratings) == 3 else [])
 
-		self.assertEqual(candidates[0]['name'], 'Tag overlap')
+    def test_stable_ids_not_names_and_multiple_acceptances(self):
+        p = profile([sub(1), sub(1), sub(2)])
+        self.assertEqual(p['summary']['unique_solved'], 2)
+        self.assertEqual(p['summary']['total_submissions'], 3)
+        self.assertEqual(p['solved_by_rating'], [{'rating': 1000, 'count': 2}])
 
-	def test_weak_tag_overlap_affects_ranking(self):
-		pool = [
-			{'contest_id': 2, 'index': 'A', 'name': 'Strong tag', 'rating': 1400, 'tags': ['graphs'], 'url': 'strong'},
-			{'contest_id': 3, 'index': 'A', 'name': 'Weak tag', 'rating': 1400, 'tags': ['dp'], 'url': 'weak'}
-		]
-		with patch('core.views.get_codeforces_problem_pool', return_value=(pool, None)):
-			candidates, _ = views.rank_recommendation_candidates(
-				self.current_problem, '1', 'A', self.analysis, [], 1400
-			)
+    def test_multiple_tags_unrated_and_numeric_buckets(self):
+        p = profile([sub(1, tags=['math', 'dp'], rating=1200), sub(2, rating=None), sub(3, rating=800)])
+        self.assertEqual([r['rating'] for r in p['solved_by_rating']], [800, 1200])
+        self.assertEqual(p['unrated_solved'], 1)
+        self.assertEqual(sum(t['solved'] for t in p['topics']), 4)
 
-		self.assertEqual(candidates[0]['name'], 'Weak tag')
+    def test_pending_not_failure_and_distinct_topic_solve_rate(self):
+        p = profile([sub(1, verdict=None), sub(2, verdict='TESTING'), sub(3, verdict='WRONG_ANSWER'), sub(3)])
+        self.assertEqual(p['summary']['pending_submissions'], 2)
+        self.assertEqual(p['summary']['acceptance_rate'], 50)
+        topic = p['topics'][0]
+        self.assertEqual(topic['attempted'], 1)
+        self.assertEqual(topic['solved'], 1)
+        self.assertEqual(topic['failed_submissions'], 1)
+        self.assertEqual(topic['solve_rate'], 100)
 
-	def test_rating_proximity_affects_ranking(self):
-		pool = [
-			{'contest_id': 2, 'index': 'A', 'name': 'Far', 'rating': 1800, 'tags': ['math'], 'url': 'far'},
-			{'contest_id': 3, 'index': 'A', 'name': 'Close', 'rating': 1450, 'tags': ['math'], 'url': 'close'}
-		]
-		with patch('core.views.get_codeforces_problem_pool', return_value=(pool, None)):
-			candidates, _ = views.rank_recommendation_candidates(
-				self.current_problem, '1', 'A', {'tag_performance': {}}, [], 1400
-			)
+    def test_low_sample_is_not_classified_weak(self):
+        p = profile([sub(1, verdict='WRONG_ANSWER')] * 20 + [sub(2, verdict='RUNTIME_ERROR')])
+        self.assertEqual(p['weak_topics'], [])
+        self.assertFalse(p['topics'][0]['evidence_sufficient'])
 
-		self.assertEqual(candidates[0]['name'], 'Close')
+    def test_retries_weakness_signals_and_no_inferred_bug(self):
+        rows = [sub(i, verdict='WRONG_ANSWER', tags=['dp']) for i in range(1, 7) for _ in range(3)]
+        rows += [sub(1, tags=['dp'])]
+        p = profile(rows)
+        topic = p['weak_topics'][0]
+        self.assertEqual(topic['attempted'], 6)
+        self.assertEqual(topic['solved'], 1)
+        self.assertEqual(topic['average_attempts_per_solved'], 4)
+        self.assertEqual(topic['repeated_unsuccessful'], 5)
+        self.assertTrue(topic['evidence_sufficient'])
+        self.assertTrue(p['patterns'])
+        self.assertNotIn('off-by-one', ' '.join(p['patterns']))
 
-	@patch('core.views.call_ai_engine', return_value=(
-		'{"contest_id": 999, "index": "Z", "reason": "invented"}', ''
-	))
-	@patch('core.views.rank_recommendation_candidates')
-	def test_invalid_groq_selection_falls_back_to_top_candidate(self, rank_candidates, call_ai):
-		candidate = {
-			'contest_id': 2, 'index': 'A', 'name': 'Top', 'rating': 1400,
-			'tags': ['dp'], 'url': 'top'
-		}
-		rank_candidates.return_value = ([candidate], None)
+    def test_verdict_categories_include_compile_memory_and_other(self):
+        codes = ['OK', 'WRONG_ANSWER', 'TIME_LIMIT_EXCEEDED', 'MEMORY_LIMIT_EXCEEDED', 'RUNTIME_ERROR', 'COMPILATION_ERROR', 'SKIPPED']
+        p = profile([sub(i, verdict=v) for i, v in enumerate(codes)])
+        self.assertEqual({r['verdict'] for r in p['verdicts']}, set(codes))
 
-		recommendation, error = views.get_recommendation(
-			self.current_problem, '1', 'A', self.analysis, [], 1400, 'fallback-user'
-		)
+    def test_incomplete_and_missing_ids_are_visible(self):
+        p = analyze_profile({'handle': 'example'}, [], [sub(), {'verdict': 'OK', 'problem': {'name': 'unknown'}}], truncated=True)
+        self.assertFalse(p['history']['complete'])
+        self.assertTrue(p['history']['truncated'])
+        self.assertEqual(p['history']['missing_problem_ids'], 1)
+        self.assertEqual(p['summary']['unique_solved'], 1)
+        self.assertNotIn('_solved_keys', public_profile(p))
 
-		self.assertIsNone(error)
-		self.assertEqual(recommendation['problem'], candidate)
-		self.assertIn('deterministic', recommendation['reason'])
-		call_ai.assert_called_once()
+    def test_handle_validation(self):
+        for value in ['tourist', 'a-b.c_1']:
+            self.assertTrue(valid_handle(value))
+        for value in ['../secret', '', 'a' * 25, 'a&handles=b', None]:
+            self.assertFalse(valid_handle(value))
 
-	@patch('core.views.call_ai_engine', return_value=(
-		'{"contest_id": 2, "index": "A", "reason": "Use this next."}', ''
-	))
-	@patch('core.views.rank_recommendation_candidates')
-	def test_groq_selection_is_restricted_to_supplied_candidates(self, rank_candidates, call_ai):
-		candidate = {
-			'contest_id': 2, 'index': 'A', 'name': 'Allowed', 'rating': 1400,
-			'tags': ['dp'], 'url': 'allowed'
-		}
-		rank_candidates.return_value = ([candidate], None)
+    def test_strong_topics_are_not_mislabeled_insufficient(self):
+        rows = [sub(i) for i in range(6)] + [sub(1), sub(2)]
+        p = profile(rows)
+        self.assertTrue(p['strong_topics'])
+        self.assertTrue(p['focus_topics'][0]['evidence_sufficient'])
+        self.assertIn('Consolidate', p['focus_topics'][0]['reason'])
 
-		recommendation, _ = views.get_recommendation(
-			self.current_problem, '1', 'A', self.analysis, [], 1400, 'restricted-user'
-		)
+    def test_review_url_validation_rejects_off_domain_and_preserves_cf_routes(self):
+        from .services.urls import problem_url
+        self.assertIsNone(problem_url('http://127.0.0.1/?codeforces.com'))
+        self.assertIsNone(problem_url('https://codeforces.com.evil.invalid/problemset/problem/1/A'))
+        self.assertIsNone(problem_url('https://codeforces.com@evil.invalid/problemset/problem/1/A'))
+        self.assertEqual(problem_url('https://codeforces.com/contest/1/problem/A/'), 'https://codeforces.com/contest/1/problem/A')
 
-		self.assertEqual(recommendation['problem']['contest_id'], 2)
-		self.assertEqual(recommendation['reason'], 'Use this next.')
+    def test_html_sanitizer_preserves_safe_formatting(self):
+        text = safe_markdown('**Good** <img src=x onerror=alert(1)> [bad](javascript:alert) <script>alert(1)</script>')
+        self.assertIn('<strong>Good</strong>', text)
+        self.assertNotIn('<img', text)
+        self.assertNotIn('<script', text)
+        self.assertNotIn('href="javascript:', text)
 
-	@patch('core.views.call_ai_engine')
-	@patch('core.views.rank_recommendation_candidates', return_value=([], None))
-	def test_no_candidates_returns_none_without_groq(self, rank_candidates, call_ai):
-		recommendation, error = views.get_recommendation(
-			self.current_problem, '1', 'A', self.analysis, [], 1400, 'empty-user'
-		)
 
-		self.assertIsNone(error)
-		self.assertIsNone(recommendation)
-		call_ai.assert_not_called()
+class PracticeTests(SimpleTestCase):
+    def pool(self):
+        return [{'contestId': i, 'index': 'A', 'name': 'Example', 'rating': rating, 'tags': [tag]} for i, rating, tag in [(1, 1200, 'dp'), (2, 1200, 'math'), (3, 1200, 'dp'), (4, 2500, 'dp'), (5, 800, 'dp')]]
 
-	@patch('core.views.call_ai_engine', return_value=(
-		'{"contest_id": 2, "index": "A", "reason": "Cached choice."}', ''
-	))
-	@patch('core.views.rank_recommendation_candidates')
-	def test_recommendation_cache_prevents_repeated_groq_calls(self, rank_candidates, call_ai):
-		candidate = {
-			'contest_id': 2, 'index': 'A', 'name': 'Cached', 'rating': 1400,
-			'tags': ['dp'], 'url': 'cached'
-		}
-		rank_candidates.return_value = ([candidate], None)
+    def test_solved_exclusion_unseen_preference_and_hard_boundaries(self):
+        p = profile([sub(1), sub(2, verdict='WRONG_ANSWER')])
+        result = recommend_problems(p, self.pool())
+        ids = [x['contest_id'] for x in result['problems']]
+        self.assertNotIn(1, ids)
+        self.assertNotIn(4, ids)
+        self.assertNotIn(5, ids)
+        self.assertEqual(ids, [3, 2])
+        self.assertTrue(all(x['url'].startswith('https://codeforces.com/problemset/problem/') for x in result['problems']))
 
-		first, _ = views.get_recommendation(
-			self.current_problem, '1', 'A', self.analysis, [], 1400, 'cached-user'
-		)
-		second, _ = views.get_recommendation(
-			self.current_problem, '1', 'A', self.analysis, [], 1400, 'cached-user'
-		)
+    def test_weak_topic_priority(self):
+        p = profile([sub(i, verdict='WRONG_ANSWER', tags=['dp']) for i in range(10, 16) for _ in range(2)])
+        result = recommend_problems(p, self.pool())
+        self.assertEqual(result['problems'][0]['tags'], ['dp'])
 
-		self.assertEqual(first, second)
-		call_ai.assert_called_once()
+    def test_unrated_fallback_and_malformed_urls(self):
+        result = recommend_problems(profile(rating=None), self.pool() + [{'contestId': 'bad/url', 'index': 'A', 'rating': 900, 'tags': []}])
+        self.assertTrue(result['fallback'])
+        self.assertTrue(all(800 <= x['rating'] <= 1000 for x in result['problems']))
 
-# Create your tests here.
+    def test_incomplete_history_withholds_unverifiable_recommendations(self):
+        p = profile(); p['history']['complete'] = False
+        result = recommend_problems(p, self.pool())
+        self.assertEqual(result['problems'], [])
+        self.assertTrue(result['blocked_incomplete'])
+
+
+class CodeforcesServiceTests(SimpleTestCase):
+    def setUp(self):
+        cache.clear()
+
+    def test_cached_bundle_fetches_history_once_and_never_ai(self):
+        responses = [[{'handle': 'example', 'rating': 1200}], [], [sub()], {'problems': []}]
+        with patch('core.services.codeforces.get_api', side_effect=responses) as api, patch('core.services.codeforces.time.sleep'), patch('core.views.call_ai_engine') as ai:
+            first = get_profile('example')
+            self.assertEqual(get_profile('EXAMPLE'), first)
+            self.assertEqual(api.call_count, 4)
+            self.assertEqual(sum(call.args[0] == 'user.status' for call in api.call_args_list), 1)
+            ai.assert_not_called()
+
+    def test_truncated_history_flag(self):
+        with patch('core.services.codeforces.HISTORY_LIMIT', 2), patch('core.services.codeforces.get_api', side_effect=[[{'handle': 'example'}], [], [sub(1), sub(2), sub(3)], {'problems': []}]), patch('core.services.codeforces.time.sleep'):
+            self.assertTrue(get_profile('example')['history']['truncated'])
+
+    def test_network_rate_limit_bad_json_and_failed_api(self):
+        for response in [Mock(status_code=429), Mock(status_code=502), Mock(status_code=200, json=lambda: {'status': 'FAILED'}), Mock(status_code=200, json=Mock(side_effect=ValueError()))]:
+            with patch('core.services.codeforces.requests.get', return_value=response), self.assertRaises(CodeforcesError):
+                get_api('user.info')
+        with patch('core.services.codeforces.requests.get', side_effect=requests.Timeout()), self.assertRaises(CodeforcesError):
+            get_api('user.info')

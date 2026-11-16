@@ -1,81 +1,35 @@
 {% extends 'base.html' %}
-
+{% load static %}
+{% block title %}Code review | CP Assistant{% endblock %}
 {% block content %}
-<div class="container mt-5">
-    <a href="{% url 'dashboard' %}" class="btn btn-outline-secondary mb-4">&larr; Back to Dashboard</a>
-    
-    <div class="row">
-        <div class="col-lg-5 mb-4">
-            <div class="card shadow-sm border-0 h-100">
-                <div class="card-header bg-dark text-white">
-                    <h5 class="mb-0">🤖 Submit Code for Review</h5>
-                </div>
-                <div class="card-body">
-                    <form method="POST">
-                        {% csrf_token %}
-                        {{ form.as_p }}
-                        <button type="submit" id="analyzeBtn" class="btn btn-primary w-100 mt-2">
-                            <span id="btnText">Analyze Complexity & Edge Cases</span>
-                            <span id="btnSpinner" class="spinner-border spinner-border-sm d-none ms-2" role="status" aria-hidden="true"></span>
-                        </button>
-                    </form>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-lg-7">
-            <div class="card shadow-sm border-0 h-100">
-                <div class="card-header bg-success text-white">
-                    <h5 class="mb-0">✨ AI Feedback Report</h5>
-                </div>
-                <div class="card-body bg-light" style="max-height: 700px; overflow-y: auto;">
-                    
-                    {% if review_result %}
-                        {% if reasoning_result %}
-                            <div class="p-3 mb-4 bg-white text-muted border-start border-secondary border-4 small fst-italic shadow-sm">
-                                {{ reasoning_result|safe }}
-                            </div>
-                        {% endif %}
-
-                        <div class="markdown-content p-3 bg-white shadow-sm rounded">
-                            {{ review_result|safe }}
-                        </div>
-                    {% else %}
-                        <div class="text-center text-muted mt-5">
-                            <p>Paste your Codeforces problem URL and source code on the left.</p>
-                            <p>The AI will scan for edge cases, logical flaws, and Big-O constraints.</p>
-                        </div>
-                    {% endif %}
-                    
-                </div>
-            </div>
-        </div>
+<div class="container workspace-page review-page">
+    <div class="page-heading"><div><p class="eyebrow">MAKE YOUR NEXT SUBMISSION STRONGER</p><h1>Look closer at your code.</h1><p class="text-secondary">The problem, the exact lines to revisit, and the full suggested solution.</p></div><a href="{% url 'notes' %}" class="btn btn-outline-primary">My notebook &rarr;</a></div>
+    <div class="review-layout">
+        <section class="editor-card"><div class="section-title"><span class="step-label">01</span><div><h2>Your submission</h2><p>A Codeforces problem and your complete source</p></div></div>
+            <form method="post" id="review-form">{% csrf_token %}
+                {% if form.non_field_errors %}<div class="alert alert-warning" role="alert">{{ form.non_field_errors }}</div>{% endif %}
+                <div class="mb-3"><label for="{{ form.problem_link.id_for_label }}" class="form-label">Codeforces problem URL</label>{{ form.problem_link }}{{ form.problem_link.errors }}</div>
+                <div class="mb-3"><label for="{{ form.language.id_for_label }}" class="form-label">Language</label>{{ form.language }}{{ form.language.errors }}</div>
+                <div class="mb-3"><label for="{{ form.code.id_for_label }}" class="form-label">Your source code</label>{{ form.code }}{{ form.code.errors }}<p class="small text-secondary mt-2">Up to 40,000 characters. Source is sent to the configured AI provider only when you request a review.</p></div>
+                <button type="submit" id="analyzeBtn" class="btn btn-primary w-100"><span id="btnText">Review my submission</span><span id="btnSpinner" class="spinner-border spinner-border-sm d-none ms-2" aria-hidden="true"></span></button>
+                <p id="review-status" role="status" aria-live="polite" class="small text-secondary mt-2"></p>
+            </form>
+        </section>
+        <section class="review-results" aria-label="Code review results">
+            {% if review %}
+                <article class="review-summary"><p class="eyebrow">AI REVIEW / {{ review.language }}</p><h2>Your review</h2><p>{{ review.summary }}</p><div class="complexity-note"><strong>Complexity</strong><p>{{ review.complexity }}</p></div><p class="small text-secondary mb-0">Advisory feedback. The code has not been executed or judged by Codeforces.</p></article>
+                <div class="section-title mt-4"><span class="step-label">02</span><div><h2>What to revisit</h2><p>{{ review.issues|length }} line-specific suggestion{{ review.issues|length|pluralize }}</p></div></div>
+                {% for issue in review.issues %}<article class="issue-card issue-{{ issue.severity }}"><div class="d-flex justify-content-between gap-2 mb-2"><span class="issue-severity">{{ issue.severity }}</span><a href="#original-{{ issue.line_start }}" class="small">Lines {{ issue.line_start }}&ndash;{{ issue.line_end }}</a></div><h3>{{ issue.title }}</h3><pre class="issue-excerpt notranslate" translate="no"><code>{{ issue.excerpt }}</code></pre><p>{{ issue.explanation }}</p><div class="suggested-fix"><strong>Suggested change</strong><p>{{ issue.suggested_fix }}</p></div></article>{% empty %}<div class="empty-feedback">No line-specific issues were identified. Review the edge cases and test your solution before submitting.</div>{% endfor %}
+                {% if review.topics %}<div class="focus-topics"><h3>Topics to focus on</h3>{% for topic in review.topics %}<span>{{ topic }}</span>{% endfor %}</div>{% endif %}
+            {% else %}
+                <div class="review-empty"><div class="empty-code-icon" aria-hidden="true">{ }</div><p class="eyebrow">FEEDBACK WITH CONTEXT</p><h2>See beyond the verdict.</h2><p>Get potential issues anchored to your code, concrete writing improvements, and a complete suggested solution.</p><div class="review-empty-steps"><span>01 &nbsp; Add problem + source</span><span>02 &nbsp; Inspect the feedback</span><span>03 &nbsp; Test and save a lesson</span></div></div>
+            {% endif %}
+        </section>
     </div>
+    {% if problem_statement %}<details class="problem-context" {% if not review %}open{% endif %}><summary>Problem statement <span>Fetched from Codeforces</span></summary><pre class="problem-statement notranslate" translate="no">{{ problem_statement }}</pre></details>{% endif %}
+    {% if submitted_code %}<section class="source-section"><div class="source-heading"><div><p class="eyebrow">YOUR ORIGINAL SOURCE</p><h2>{% if review %}Highlighted lines to revisit{% else %}Your submitted code{% endif %}</h2></div>{% if review %}<button class="btn btn-sm btn-outline-secondary copy-code" data-source="original" type="button">Copy original</button>{% endif %}</div>{% include 'core/code_lines.html' with lines=source_lines label='Original source code' prefix='original' %}{% if review.issues %}<p class="small text-secondary mt-2">Amber highlights correspond to the suggestions above; they are not a runtime verdict.</p>{% endif %}</section>{% endif %}
+    {% if review %}<section class="source-section"><div class="source-heading"><div><p class="eyebrow">FULL SUGGESTED SOLUTION</p><h2>The complete code, in one place.</h2></div><button class="btn btn-sm btn-outline-primary copy-code" data-source="suggested" type="button">Copy suggested code</button></div>{% include 'core/code_lines.html' with lines=corrected_lines label='Complete suggested source code' prefix='suggested' %}<p class="small text-secondary mt-2">AI-generated suggestion. Verify the algorithm, constraints and sample cases before using it.</p></section>{{ copy_sources|json_script:'copy-sources' }}{% endif %}
+    <p id="copy-status" class="small text-secondary" role="status" aria-live="polite"></p>
 </div>
-
-<script>
-    // Listen for the form submission
-    document.querySelector('form').addEventListener('submit', function(e) {
-        // Ensure the form has actual code in it before locking
-        if (this.checkValidity()) {
-            const btn = document.getElementById('analyzeBtn');
-            const text = document.getElementById('btnText');
-            const spinner = document.getElementById('btnSpinner');
-
-            // 1. Change the text so the user knows it is working
-            text.innerText = 'Analyzing... please wait ';
-            
-            // 2. Un-hide the spinner icon
-            spinner.classList.remove('d-none');
-            
-            // 3. Make the button look unclickable using Bootstrap classes
-            btn.classList.add('disabled');
-            
-            // 4. Safely disable the button slightly after submit triggers
-            setTimeout(() => { 
-                btn.disabled = true; 
-            }, 10);
-        }
-    });
-</script>
 {% endblock %}
+{% block scripts %}<script src="{% static 'core/code-review.js' %}"></script>{% endblock %}

@@ -1,0 +1,9 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container my-5" style="max-width:900px"><h1 class="h3">Your extension connections</h1>
+<p>Website logout ends the website session. Extension authorizations are independent; revoke them here or use Disconnect in the extension.</p>
+{% for connection in connections %}<div class="card mb-3"><div class="card-body">
+<p>CP Assistant · <code>{{ connection.extension_id }}</code></p><p>Connected {{ connection.created_at }} · Expires {{ connection.expires_at }}</p>
+<form method="post">{% csrf_token %}<input type="hidden" name="grant_id" value="{{ connection.id }}"><button class="btn btn-outline-danger">Revoke this connection</button></form>
+</div></div>{% empty %}<p>No active extension authorizations.</p>{% endfor %}</div>
+{% endblock %}

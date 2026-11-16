@@ -1,7 +1,16 @@
-# Environments
-.env
+# Local environments and secrets (keep shareable examples)
+.venv/
 venv/
 env/
+.env
+.env.*
+!.env.example
+!.env.*.example
+*.pem
+*.key
+.ssh/
+.aws/
+secrets/
 
 # Python Cache
 __pycache__/
@@ -9,15 +18,41 @@ __pycache__/
 *.pyo
 *.pyd
 
-# Django Local Database
-db.sqlite3
-db.sqlite3-journal
+# Local databases, exports, and backups
+*.sqlite3
+*.sqlite3-*
+*.sqlite3.backup*
 sqlite_data.json
-db.sqlite3.backup
+*.dump
+*.backup
+backups/
+
+# Generated application files
+staticfiles/
+media/
+*.log
+logs/
+
+# Dependency, build, and test output
+node_modules/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.nox/
+.coverage
+.coverage.*
+coverage/
+htmlcov/
+extension/*.zip
+extension/*.crx
+
+# Local IDE settings
+.idea/
+.vscode/
 
 # OS generated files
 .DS_Store
 Thumbs.db
-
-# Static files collected during production testing
-staticfiles/
